@@ -1,0 +1,86 @@
+2025-03-21 20:44:12 - __main__ - INFO - Starting SPM PyQt Interface
+2025-03-21 20:44:14 - core.matlab_engine - INFO - Starting MATLAB engine...
+2025-03-21 20:45:15 - core.matlab_engine - INFO - Using SPM path: D:\mispm
+2025-03-21 20:45:27 - core.matlab_engine - INFO - MATLAB engine started successfully
+2025-03-21 20:48:16 - core.matlab_engine - INFO - Converting DICOM files from D:/AD-100_PET_5070/AD-100_PET_5070/dicom/AD01 to NIFTI format
+2025-03-21 20:48:21 - ui.main_window - INFO - Displaying image: D:\AD-100_PET_5070\AD-100_PET_5070\dicom\AD01\1\unknownAD01CentiloidCentiloidPTAvgFrmTanon_AD01_0dcm_0001\s1-095339-00000-00001-0.nii
+2025-03-21 20:48:21 - core.matlab_engine - INFO - Displaying image: D:\AD-100_PET_5070\AD-100_PET_5070\dicom\AD01\1\unknownAD01CentiloidCentiloidPTAvgFrmTanon_AD01_0dcm_0001\s1-095339-00000-00001-0.nii
+2025-03-21 20:48:28 - core.matlab_engine - INFO - Calling MATLAB function: spm_vol
+2025-03-21 20:48:28 - core.matlab_engine - ERROR - Error calling MATLAB function spm_vol: MATLAB 函数无法求解
+2025-03-21 20:48:29 - ui.main_window - ERROR - Error getting image info: MATLAB 函数无法求解
+2025-03-21 20:49:14 - core.matlab_engine - INFO - Coregistering D:/AD-100_PET_5070/AD-100_PET_5070/dicom/AD01/1/unknownAD01CentiloidCentiloidPTAvgFrmTanon_AD01_0dcm_0001/s1-095339-00000-00001-0.nii to D:/AD-100_PET_5070/AD-100_PET_5070/dicom/AD01/1/unknownAD01CentiloidCentiloidPTAvgFrmTanon_AD01_0dcm_0001/s1-095339-00000-00001-0.nii
+2025-03-21 20:49:49 - core.matlab_engine - INFO - Normalizing image: D:/AD-100_PET_5070/AD-100_PET_5070/dicom/AD01/1/unknownAD01CentiloidCentiloidPTAvgFrmTanon_AD01_0dcm_0001/rs1-095339-00000-00001-0.nii
+2025-03-21 20:50:05 - ui.main_window - INFO - Displaying image: D:/AD-100_PET_5070/AD-100_PET_5070/dicom/AD01/1/unknownAD01CentiloidCentiloidPTAvgFrmTanon_AD01_0dcm_0001\wrs1-095339-00000-00001-0.nii
+2025-03-21 20:50:05 - core.matlab_engine - INFO - Displaying image: D:/AD-100_PET_5070/AD-100_PET_5070/dicom/AD01/1/unknownAD01CentiloidCentiloidPTAvgFrmTanon_AD01_0dcm_0001\wrs1-095339-00000-00001-0.nii
+2025-03-21 20:50:06 - core.matlab_engine - INFO - Calling MATLAB function: spm_vol
+2025-03-21 20:50:06 - core.matlab_engine - ERROR - Error calling MATLAB function spm_vol: MATLAB 函数无法求解
+2025-03-21 20:50:06 - ui.main_window - ERROR - Error getting image info: MATLAB 函数无法求解
+2025-03-21 20:50:26 - core.matlab_engine - INFO - Checking registration for 1 images
+2025-03-21 20:50:26 - core.matlab_engine - ERROR - Error checking registration: 
+  File D:\mispm\spm_check_registration.m, line 27, in spm_check_registration
+Cell elements must be character arrays.
+
+2025-03-21 21:03:31 - __main__ - INFO - Starting SPM PyQt Interface
+2025-03-21 21:03:32 - core.matlab_engine - INFO - Starting MATLAB engine...
+2025-03-21 21:03:46 - core.matlab_engine - INFO - Using SPM path: D:\mispm
+2025-03-21 21:03:57 - core.matlab_engine - INFO - MATLAB engine started successfully
+2025-03-21 21:06:14 - __main__ - INFO - Starting SPM PyQt Interface
+2025-03-21 21:06:14 - core.matlab_engine - INFO - Starting MATLAB engine...
+2025-03-21 21:06:26 - core.matlab_engine - INFO - Using SPM path: D:\mispm
+2025-03-21 21:06:34 - core.matlab_engine - INFO - MATLAB engine started successfully
+2025-03-21 21:09:11 - ui.main_window - INFO - Displaying image: D:/AD-100_PET_5070/AD-100_PET_5070/dicom/AD01/1/unknownAD01CentiloidCentiloidPTAvgFrmTanon_AD01_0dcm_0001/wrs1-095339-00000-00001-0.nii
+2025-03-21 21:09:11 - core.matlab_engine - INFO - Displaying image: D:/AD-100_PET_5070/AD-100_PET_5070/dicom/AD01/1/unknownAD01CentiloidCentiloidPTAvgFrmTanon_AD01_0dcm_0001/wrs1-095339-00000-00001-0.nii
+2025-03-21 21:09:16 - core.matlab_engine - INFO - Calling MATLAB function: spm_vol
+2025-03-21 21:09:16 - core.matlab_engine - ERROR - Error calling MATLAB function spm_vol: MATLAB 函数无法求解
+2025-03-21 21:09:16 - ui.main_window - ERROR - Error getting image info: MATLAB 函数无法求解
+2025-03-21 21:09:28 - ui.main_window - INFO - Displaying image: D:/AD-100_PET_5070/AD-100_PET_5070/dicom/AD01/1/unknownAD01CentiloidCentiloidPTAvgFrmTanon_AD01_0dcm_0001/rs1-095339-00000-00001-0.nii
+2025-03-21 21:09:28 - core.matlab_engine - INFO - Displaying image: D:/AD-100_PET_5070/AD-100_PET_5070/dicom/AD01/1/unknownAD01CentiloidCentiloidPTAvgFrmTanon_AD01_0dcm_0001/rs1-095339-00000-00001-0.nii
+2025-03-21 21:09:29 - core.matlab_engine - INFO - Calling MATLAB function: spm_vol
+2025-03-21 21:09:29 - core.matlab_engine - ERROR - Error calling MATLAB function spm_vol: MATLAB 函数无法求解
+2025-03-21 21:09:29 - ui.main_window - ERROR - Error getting image info: MATLAB 函数无法求解
+2025-03-21 21:09:52 - core.matlab_engine - INFO - Coregistering D:/AD-100_PET_5070/AD-100_PET_5070/dicom/AD01/1/unknownAD01CentiloidCentiloidPTAvgFrmTanon_AD01_0dcm_0001/s1-095339-00000-00001-0.nii to D:/AD-100_PET_5070/AD-100_PET_5070/dicom/AD01/1/unknownAD01CentiloidCentiloidPTAvgFrmTanon_AD01_0dcm_0001/rs1-095339-00000-00001-0.nii using cost function mi
+2025-03-21 21:10:08 - ui.main_window - INFO - Displaying image: D:/AD-100_PET_5070/AD-100_PET_5070/dicom/AD01/1/unknownAD01CentiloidCentiloidPTAvgFrmTanon_AD01_0dcm_0001\rs1-095339-00000-00001-0.nii
+2025-03-21 21:10:08 - core.matlab_engine - INFO - Displaying image: D:/AD-100_PET_5070/AD-100_PET_5070/dicom/AD01/1/unknownAD01CentiloidCentiloidPTAvgFrmTanon_AD01_0dcm_0001\rs1-095339-00000-00001-0.nii
+2025-03-21 21:10:08 - core.matlab_engine - INFO - Calling MATLAB function: spm_vol
+2025-03-21 21:10:09 - core.matlab_engine - ERROR - Error calling MATLAB function spm_vol: MATLAB 函数无法求解
+2025-03-21 21:10:09 - ui.main_window - ERROR - Error getting image info: MATLAB 函数无法求解
+2025-03-21 21:10:56 - core.matlab_engine - INFO - Normalizing image: D:/AD-100_PET_5070/AD-100_PET_5070/dicom/AD01/1/unknownAD01CentiloidCentiloidPTAvgFrmTanon_AD01_0dcm_0001/rs1-095339-00000-00001-0.nii using method: standard
+2025-03-21 21:10:56 - core.matlab_engine - INFO - Using default template: D:\mispm\tpm\TPM.nii
+2025-03-21 21:11:22 - ui.main_window - INFO - Displaying image: D:/AD-100_PET_5070/AD-100_PET_5070/dicom/AD01/1/unknownAD01CentiloidCentiloidPTAvgFrmTanon_AD01_0dcm_0001\wrs1-095339-00000-00001-0.nii
+2025-03-21 21:11:22 - core.matlab_engine - INFO - Displaying image: D:/AD-100_PET_5070/AD-100_PET_5070/dicom/AD01/1/unknownAD01CentiloidCentiloidPTAvgFrmTanon_AD01_0dcm_0001\wrs1-095339-00000-00001-0.nii
+2025-03-21 21:11:23 - core.matlab_engine - INFO - Calling MATLAB function: spm_vol
+2025-03-21 21:11:23 - core.matlab_engine - ERROR - Error calling MATLAB function spm_vol: MATLAB 函数无法求解
+2025-03-21 21:11:23 - ui.main_window - ERROR - Error getting image info: MATLAB 函数无法求解
+2025-03-21 21:11:30 - core.matlab_engine - INFO - Setting origin for image: D:/AD-100_PET_5070/AD-100_PET_5070/dicom/AD01/1/unknownAD01CentiloidCentiloidPTAvgFrmTanon_AD01_0dcm_0001\wrs1-095339-00000-00001-0.nii
+2025-03-21 21:11:40 - ui.main_window - INFO - Displaying image: D:/AD-100_PET_5070/AD-100_PET_5070/dicom/AD01/1/unknownAD01CentiloidCentiloidPTAvgFrmTanon_AD01_0dcm_0001\wrs1-095339-00000-00001-0.nii
+2025-03-21 21:11:40 - core.matlab_engine - INFO - Displaying image: D:/AD-100_PET_5070/AD-100_PET_5070/dicom/AD01/1/unknownAD01CentiloidCentiloidPTAvgFrmTanon_AD01_0dcm_0001\wrs1-095339-00000-00001-0.nii
+2025-03-21 21:11:41 - core.matlab_engine - INFO - Calling MATLAB function: spm_vol
+2025-03-21 21:11:41 - core.matlab_engine - ERROR - Error calling MATLAB function spm_vol: MATLAB 函数无法求解
+2025-03-21 21:11:41 - ui.main_window - ERROR - Error getting image info: MATLAB 函数无法求解
+2025-03-21 21:11:45 - core.matlab_engine - INFO - Checking registration for 1 images
+2025-03-21 21:11:45 - core.matlab_engine - ERROR - Error checking registration: 
+  File D:\mispm\spm_check_registration.m, line 27, in spm_check_registration
+Cell elements must be character arrays.
+
+2025-03-21 21:11:55 - core.matlab_engine - INFO - MATLAB engine stopped successfully
+2025-03-21 21:11:57 - core.matlab_engine - INFO - Starting MATLAB engine...
+2025-03-21 21:12:09 - core.matlab_engine - INFO - Using SPM path: D:\mispm
+2025-03-21 21:12:18 - core.matlab_engine - INFO - MATLAB engine started successfully
+2025-03-21 21:21:31 - __main__ - INFO - Starting SPM PyQt Interface
+2025-03-21 21:21:32 - core.matlab_engine - INFO - Starting MATLAB engine...
+2025-03-21 21:21:44 - core.matlab_engine - INFO - Using SPM path: D:\mispm
+2025-03-21 21:21:53 - core.matlab_engine - INFO - MATLAB engine started successfully
+2025-03-21 21:22:34 - core.matlab_engine - INFO - Calling MATLAB function: spm_select
+2025-03-21 21:22:43 - core.matlab_engine - INFO - Calling MATLAB function: spm_select
+2025-03-21 21:22:57 - core.matlab_engine - INFO - Converting 1 DICOM files to NIFTI format
+2025-03-21 21:23:04 - ui.main_window - INFO - Displaying image: D:\AD-100_PET_5070\AD-100_PET_5070\dicom\AD03\1\unknownAD03CentiloidCentiloidPTAvgFrmTanon_AD03_0dcm_0001\s1-095346-00000-00002-0.nii
+2025-03-21 21:23:04 - core.matlab_engine - INFO - Displaying image: D:\AD-100_PET_5070\AD-100_PET_5070\dicom\AD03\1\unknownAD03CentiloidCentiloidPTAvgFrmTanon_AD03_0dcm_0001\s1-095346-00000-00002-0.nii
+2025-03-21 21:23:09 - core.matlab_engine - INFO - Calling MATLAB function: spm_vol
+2025-03-21 21:23:09 - core.matlab_engine - ERROR - Error calling MATLAB function spm_vol: MATLAB 函数无法求解
+2025-03-21 21:23:10 - ui.main_window - ERROR - Error getting image info: MATLAB 函数无法求解
+2025-03-21 21:23:27 - ui.main_window - INFO - Displaying image: D:/AD-100_PET_5070/AD-100_PET_5070/nifti/AD01_PiB_5070.nii
+2025-03-21 21:23:27 - core.matlab_engine - INFO - Displaying image: D:/AD-100_PET_5070/AD-100_PET_5070/nifti/AD01_PiB_5070.nii
+2025-03-21 21:23:28 - core.matlab_engine - INFO - Calling MATLAB function: spm_vol
+2025-03-21 21:23:28 - core.matlab_engine - ERROR - Error calling MATLAB function spm_vol: MATLAB 函数无法求解
+2025-03-21 21:23:28 - ui.main_window - ERROR - Error getting image info: MATLAB 函数无法求解
+2025-03-21 21:23:55 - core.matlab_engine - INFO - Coregistering D:/AD-100_PET_5070/AD-100_PET_5070/nifti/AD13_PiB_5070.nii to D:/AD-100_PET_5070/AD-100_PET_5070/nifti/AD08_PiB_5070.nii using cost function mi
