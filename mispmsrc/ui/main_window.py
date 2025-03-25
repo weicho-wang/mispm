@@ -6,15 +6,18 @@ import sys
 import logging
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-    QLabel, QFileDialog, QMessageBox, QGroupBox, QSplitter,
-    QStatusBar, QProgressBar, QTextEdit, QApplication, QFrame, QComboBox, QInputDialog
+    QLabel, QFileDialog, QMessageBox, QGroupBox, QStatusBar, QProgressBar,
+    QTextEdit, QApplication, QComboBox, QInputDialog
 )
 from PyQt5.QtCore import Qt, pyqtSlot, QSize
-from PyQt5.QtGui import QFont, QIcon
+from PyQt5.QtGui import QFont
 
-from core.matlab_engine import MatlabEngine
-from utils.logger import Logger
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+sys.path.append(project_root)
+sys.path.append(os.path.join(project_root, "core"))  # Ensure this path is correct
 
+from mispmsrc.core.matlab_engine import MatlabEngine
+from mispmsrc.utils.logger import Logger
 
 class LogWidget(QTextEdit):
     """Widget to display log messages"""
@@ -44,91 +47,6 @@ class LogWidget(QTextEdit):
         self.append(f'<span style="color:{color};">{message}</span>')
 
 
-class ImageViewWidget(QWidget):
-    """Widget to display NIFTI images through MATLAB"""
-    
-    def __init__(self, parent=None):
-        super(ImageViewWidget, self).__init__(parent)
-        self.logger = logging.getLogger(__name__)
-        self.matlab_engine = MatlabEngine()
-        self.current_image = None
-        
-        # Set up UI
-        self.setup_ui()
-        
-    def setup_ui(self):
-        """Set up the UI components"""
-        layout = QVBoxLayout(self)
-        
-        # Display label
-        self.image_label = QLabel("No image loaded")
-        self.image_label.setAlignment(Qt.AlignCenter)
-        self.image_label.setStyleSheet("background-color: black; color: white;")
-        self.image_label.setMinimumSize(QSize(400, 400))
-        
-        layout.addWidget(self.image_label)
-        
-        # Info label
-        self.info_label = QLabel("Image information will appear here")
-        self.info_label.setAlignment(Qt.AlignLeft)
-        self.info_label.setWordWrap(True)
-        layout.addWidget(self.info_label)
-        
-        self.setLayout(layout)
-        
-    def display_image(self, image_path):
-        """
-        Display the image using MATLAB SPM functions
-        
-        Args:
-            image_path: Path to the NIFTI image file
-        """
-        self.logger.info(f"Displaying image: {image_path}")
-        self.current_image = image_path
-        
-        if not self.matlab_engine.is_running():
-            QMessageBox.warning(self, "MATLAB Engine", "MATLAB engine is not running.")
-            return
-            
-        try:
-            # Use MATLAB to display the image
-            result = self.matlab_engine.display_image(image_path)
-            
-            if result:
-                self.image_label.setText(f"Image loaded: {os.path.basename(image_path)}")
-                
-                # Get image information
-                self.update_image_info(image_path)
-            else:
-                self.image_label.setText("Failed to load image")
-                
-        except Exception as e:
-            self.logger.error(f"Error displaying image: {str(e)}")
-            QMessageBox.critical(self, "Error", f"Failed to display image: {str(e)}")
-    
-    def update_image_info(self, image_path):
-        """
-        Update the image information display
-        
-        Args:
-            image_path: Path to the image file
-        """
-        try:
-            # Get image information using MATLAB
-            info = self.matlab_engine.call_function("spm_vol", image_path)
-            
-            # Format and display the information
-            info_text = f"Filename: {os.path.basename(image_path)}\n"
-            info_text += f"Dimensions: {info.dim}\n"
-            info_text += f"Voxel size: {info.mat}\n"
-            
-            self.info_label.setText(info_text)
-            
-        except Exception as e:
-            self.logger.error(f"Error getting image info: {str(e)}")
-            self.info_label.setText(f"Error getting image info: {str(e)}")
-
-
 class MainWindow(QMainWindow):
     """Main window for the SPM PyQt Interface"""
     
@@ -142,6 +60,7 @@ class MainWindow(QMainWindow):
         self.matlab_engine = MatlabEngine()
         
         # Set up UI
+        self.run_script_btn = QPushButton("Run MATLAB Script")
         self.setup_ui()
         
         # Connect signals
@@ -154,18 +73,15 @@ class MainWindow(QMainWindow):
         """Set up the UI components"""
         # Set window properties
         self.setWindowTitle("SPM PyQt Interface")
-        self.setMinimumSize(1200, 800)
+        self.setMinimumSize(800, 800)  # Reduced width since we removed right panel
         
         # Create central widget
         central_widget = QWidget()
-        main_layout = QHBoxLayout(central_widget)
+        main_layout = QVBoxLayout(central_widget)
         
-        # Create splitter for main layout
-        splitter = QSplitter(Qt.Horizontal)
-        
-        # Left panel - Controls
-        left_panel = QWidget()
-        left_layout = QVBoxLayout(left_panel)
+        # Left panel - Controls (now main panel)
+        main_panel = QWidget()
+        layout = QVBoxLayout(main_panel)
         
         # Group box for MATLAB engine
         engine_group = QGroupBox("MATLAB Engine")
@@ -177,42 +93,49 @@ class MainWindow(QMainWindow):
         engine_layout.addWidget(self.start_engine_btn)
         engine_layout.addWidget(self.stop_engine_btn)
         engine_group.setLayout(engine_layout)
-        left_layout.addWidget(engine_group)
+        layout.addWidget(engine_group)
         
         # Group box for DICOM conversion
         dicom_group = QGroupBox("DICOM/NIFTI Import")
         dicom_layout = QVBoxLayout()
         self.import_dicom_btn = QPushButton("Import DICOM")
-        self.import_nifti_btn = QPushButton("Import NIFTI")
+        self.import_dicom_btn.setFixedHeight(32)
         dicom_layout.addWidget(self.import_dicom_btn)
-        dicom_layout.addWidget(self.import_nifti_btn)
         dicom_group.setLayout(dicom_layout)
-        left_layout.addWidget(dicom_group)
+        layout.addWidget(dicom_group)
         
         # Group box for image manipulation
-        image_group = QGroupBox("Image Processing")
+        self.image_group = QGroupBox("Image Processing")
         image_layout = QVBoxLayout()
         
         # Load NIFTI button
         self.load_nifti_btn = QPushButton("Load NIFTI")
+        self.load_nifti_btn.setFixedHeight(32)
         image_layout.addWidget(self.load_nifti_btn)
         
-        # Coregistration with dropdown
-        coreg_layout = QHBoxLayout()
+        # Coregistration section
+        coreg_layout = QVBoxLayout()
         self.coregister_btn = QPushButton("Coregistration")
+        self.coregister_btn.setFixedHeight(32)
         self.coreg_method_combo = QComboBox()
-        self.coreg_method_combo.addItems(["Mutual Information", "Normalised Mutual Information", "Entropy Correlation Coefficient", "Normalised Cross Correlation"])
-        self.coreg_method_combo.setToolTip("Select the coregistration cost function")
+        self.coreg_method_combo.addItems([
+            "Mutual Information",
+            "Normalised Mutual Information",
+            "Entropy Correlation Coefficient",
+            "Normalised Cross Correlation"
+        ])
+        self.coreg_method_combo.setFixedHeight(32)
         coreg_layout.addWidget(self.coregister_btn)
         coreg_layout.addWidget(self.coreg_method_combo)
         image_layout.addLayout(coreg_layout)
         
-        # Normalisation with dropdown
-        normalise_layout = QHBoxLayout()
+        # Normalisation section
+        normalise_layout = QVBoxLayout()
         self.normalise_btn = QPushButton("Normalise")
+        self.normalise_btn.setFixedHeight(32)
         self.norm_method_combo = QComboBox()
         self.norm_method_combo.addItems(["Standard", "Template", "Individual"])
-        self.norm_method_combo.setToolTip("Select the normalization method")
+        self.norm_method_combo.setFixedHeight(32)
         normalise_layout.addWidget(self.normalise_btn)
         normalise_layout.addWidget(self.norm_method_combo)
         image_layout.addLayout(normalise_layout)
@@ -220,11 +143,18 @@ class MainWindow(QMainWindow):
         # Other buttons
         self.set_origin_btn = QPushButton("Set Origin")
         self.check_reg_btn = QPushButton("Check Registration")
+        self.set_origin_btn.setFixedHeight(32)
+        self.check_reg_btn.setFixedHeight(32)
         image_layout.addWidget(self.set_origin_btn)
         image_layout.addWidget(self.check_reg_btn)
         
-        image_group.setLayout(image_layout)
-        left_layout.addWidget(image_group)
+        self.image_group.setLayout(image_layout)
+        layout.addWidget(self.image_group)
+        
+        # Add run script button
+        self.run_script_btn = QPushButton("Run MATLAB Script")
+        self.run_script_btn.setFixedHeight(32)
+        layout.addWidget(self.run_script_btn)
         
         # Add log viewer
         log_group = QGroupBox("Log")
@@ -232,26 +162,10 @@ class MainWindow(QMainWindow):
         self.log_widget = LogWidget()
         log_layout.addWidget(self.log_widget)
         log_group.setLayout(log_layout)
-        left_layout.addWidget(log_group)
+        layout.addWidget(log_group)
         
-        # Add stretch to push widgets to the top
-        left_layout.addStretch()
-        
-        # Right panel - Image view
-        right_panel = QWidget()
-        right_layout = QVBoxLayout(right_panel)
-        self.image_view = ImageViewWidget()
-        right_layout.addWidget(self.image_view)
-        
-        # Add panels to splitter
-        splitter.addWidget(left_panel)
-        splitter.addWidget(right_panel)
-        
-        # Set initial sizes
-        splitter.setSizes([400, 800])
-        
-        # Add splitter to main layout
-        main_layout.addWidget(splitter)
+        # Add main panel to main layout
+        main_layout.addWidget(main_panel)
         
         # Set central widget
         self.setCentralWidget(central_widget)
@@ -284,12 +198,12 @@ class MainWindow(QMainWindow):
         
         # Button signals
         self.import_dicom_btn.clicked.connect(self.import_dicom)
-        self.import_nifti_btn.clicked.connect(self.import_nifti)
-        self.load_nifti_btn.clicked.connect(self.load_nifti)
+        self.load_nifti_btn.clicked.connect(self.load_nifti)  # This will now handle both loading and importing
         self.coregister_btn.clicked.connect(self.coregister_images)
         self.normalise_btn.clicked.connect(self.normalise_image)
         self.set_origin_btn.clicked.connect(self.set_origin)
         self.check_reg_btn.clicked.connect(self.check_registration)
+        self.run_script_btn.clicked.connect(self.run_matlab_script)
     
     def update_button_states(self, engine_running):
         """
@@ -303,7 +217,6 @@ class MainWindow(QMainWindow):
         
         # Image processing buttons
         self.import_dicom_btn.setEnabled(engine_running)
-        self.import_nifti_btn.setEnabled(engine_running)
         self.load_nifti_btn.setEnabled(engine_running)
         self.coregister_btn.setEnabled(engine_running)
         self.normalise_btn.setEnabled(engine_running)
@@ -316,12 +229,19 @@ class MainWindow(QMainWindow):
         self.log_widget.append_log("Starting MATLAB engine...")
         self.engine_status_label.setText("MATLAB Engine: Starting...")
         
-        # Start engine in a separate thread to avoid UI freezing
-        success = self.matlab_engine.start_engine()
-        
-        if not success:
-            self.log_widget.append_log("Failed to start MATLAB engine", "ERROR")
-            self.engine_status_label.setText("MATLAB Engine: Failed to start")
+        try:
+            # Start engine in a separate thread to avoid UI freezing
+            success = self.matlab_engine.start_engine()  # Remove the timeout argument
+            
+            if not success:
+                self.log_widget.append_log("Failed to start MATLAB engine", "ERROR")
+                self.engine_status_label.setText("MATLAB Engine: Failed to start")
+        except KeyboardInterrupt:
+            self.log_widget.append_log("MATLAB engine start interrupted", "ERROR")
+            self.engine_status_label.setText("MATLAB Engine: Start interrupted")
+        except Exception as e:
+            self.log_widget.append_log(f"Error starting MATLAB engine: {str(e)}", "ERROR")
+            self.engine_status_label.setText("MATLAB Engine: Error starting")
     
     @pyqtSlot()
     def stop_matlab_engine(self):
@@ -490,13 +410,13 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Error", f"Failed to convert DICOM to NIFTI: {str(e)}")
     
     @pyqtSlot()
-    def import_nifti(self):
-        """Import a NIFTI file"""
-        self.log_widget.append_log("Importing NIFTI files...")
+    def load_nifti(self):
+        """Load or import a NIFTI file"""
+        self.log_widget.append_log("NIFTI File Operation...")
         
         # Ask user if they want to select files or a directory
         msgBox = QMessageBox()
-        msgBox.setWindowTitle("Import NIFTI")
+        msgBox.setWindowTitle("NIFTI Operation")
         msgBox.setText("Would you like to select individual NIFTI files or a directory?")
         folder_btn = msgBox.addButton("Directory", QMessageBox.ActionRole)
         files_btn = msgBox.addButton("Files", QMessageBox.ActionRole)
@@ -504,7 +424,7 @@ class MainWindow(QMainWindow):
         msgBox.exec_()
         
         if msgBox.clickedButton() == QMessageBox.Cancel:
-            self.log_widget.append_log("NIFTI import cancelled")
+            self.log_widget.append_log("NIFTI operation cancelled")
             return
         
         if msgBox.clickedButton() == files_btn:  # Individual files
@@ -514,13 +434,11 @@ class MainWindow(QMainWindow):
             )
             
             if not nifti_file:
-                self.log_widget.append_log("NIFTI import cancelled")
+                self.log_widget.append_log("NIFTI operation cancelled")
                 return
                 
             self.log_widget.append_log(f"Selected NIFTI file: {nifti_file}")
             
-            # Display the NIFTI file
-            self.image_view.display_image(nifti_file)
         else:  # Directory
             # Get NIFTI directory from user
             nifti_dir = QFileDialog.getExistingDirectory(
@@ -528,14 +446,13 @@ class MainWindow(QMainWindow):
             )
             
             if not nifti_dir:
-                self.log_widget.append_log("NIFTI import cancelled")
+                self.log_widget.append_log("NIFTI operation cancelled")
                 return
                 
             self.log_widget.append_log(f"Selected NIFTI directory: {nifti_dir}")
             
             # Check if directory contains NIFTI files
             try:
-                # Use MATLAB to check for NIFTI files
                 result = self.matlab_engine.call_function("spm_select", 'FPList', nifti_dir, '.*\.nii$')
                 if len(result) == 0:
                     self.log_widget.append_log("No NIFTI files found in the selected directory", "ERROR")
@@ -546,7 +463,6 @@ class MainWindow(QMainWindow):
                 
                 # Ask user to select one of the found NIFTI files
                 if len(result) > 1:
-                    # Create a list of filenames (without full path) for display
                     filenames = [os.path.basename(file) for file in result]
                     selected_file, ok = QInputDialog.getItem(
                         self, "Select NIFTI File", 
@@ -564,37 +480,25 @@ class MainWindow(QMainWindow):
                             nifti_file = file
                             break
                 else:
-                    # Only one file found, use it directly
                     nifti_file = result[0]
                 
                 self.log_widget.append_log(f"Selected NIFTI file: {nifti_file}")
-                
-                # Display the NIFTI file
-                self.image_view.display_image(nifti_file)
                 
             except Exception as e:
                 self.log_widget.append_log(f"Error checking for NIFTI files: {str(e)}", "ERROR")
                 QMessageBox.critical(self, "Error", f"Error checking for NIFTI files: {str(e)}")
                 return
-    
-    @pyqtSlot()
-    def load_nifti(self):
-        """Load a NIFTI file"""
-        self.log_widget.append_log("Selecting NIFTI file...")
-        
-        # Get NIFTI file from user
-        nifti_file, _ = QFileDialog.getOpenFileName(
-            self, "Select NIFTI File", "", "NIFTI Files (*.nii *.nii.gz *.img);;All Files (*)"
-        )
-        
-        if not nifti_file:
-            self.log_widget.append_log("NIFTI loading cancelled")
-            return
-            
-        self.log_widget.append_log(f"Selected NIFTI file: {nifti_file}")
-        
-        # Display the NIFTI file
-        self.image_view.display_image(nifti_file)
+
+        # Load the selected NIFTI file
+        try:
+            success = self.matlab_engine.display_image(nifti_file)
+            if success:
+                self.log_widget.append_log("NIFTI file loaded successfully", "SUCCESS")
+            else:
+                self.log_widget.append_log("Failed to load NIFTI file", "ERROR")
+        except Exception as e:
+            self.log_widget.append_log(f"Error loading NIFTI file: {str(e)}", "ERROR")
+            QMessageBox.critical(self, "Error", f"Failed to load NIFTI file: {str(e)}")
     
     @pyqtSlot()
     def coregister_images(self):
@@ -817,6 +721,35 @@ class MainWindow(QMainWindow):
             self.log_widget.append_log(f"Error checking registration: {str(e)}", "ERROR")
             QMessageBox.critical(self, "Error", f"Failed to check registration: {str(e)}")
     
+    @pyqtSlot()
+    def run_matlab_script(self):
+        """Run a MATLAB script"""
+        self.log_widget.append_log("Selecting MATLAB script...")
+        
+        # Get MATLAB script file from user
+        script_file, _ = QFileDialog.getOpenFileName(
+            self, "Select MATLAB Script", "", "MATLAB Files (*.m);;All Files (*)"
+        )
+        
+        if not script_file:
+            self.log_widget.append_log("MATLAB script selection cancelled")
+            return
+            
+        self.log_widget.append_log(f"Selected MATLAB script: {script_file}")
+        
+        # Run the MATLAB script
+        try:
+            success = self.matlab_engine.run_script(script_file)
+            
+            if success:
+                self.log_widget.append_log("MATLAB script ran successfully", "SUCCESS")
+            else:
+                self.log_widget.append_log("Failed to run MATLAB script", "ERROR")
+                
+        except Exception as e:
+            self.log_widget.append_log(f"Error running MATLAB script: {str(e)}", "ERROR")
+            QMessageBox.critical(self, "Error", f"Failed to run MATLAB script: {str(e)}")
+    
     def closeEvent(self, event):
         """Handle window close event"""
         # Stop MATLAB engine if it's running
@@ -824,4 +757,14 @@ class MainWindow(QMainWindow):
             self.log_widget.append_log("Stopping MATLAB engine before closing...")
             self.matlab_engine.stop_engine()
             
-        event.accept() 
+        event.accept()
+
+    def show_window(self):
+        """Show the main window"""
+        self.show()
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    main_window = MainWindow()
+    main_window.show()
+    sys.exit(app.exec_())

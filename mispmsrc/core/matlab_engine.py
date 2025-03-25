@@ -7,7 +7,7 @@ import logging
 import matlab.engine
 import numpy as np
 from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot
-
+import tqdm
 
 class MatlabEngine(QObject):
     """
@@ -38,12 +38,13 @@ class MatlabEngine(QObject):
         self._spm_path = None
         self._initialized = True
         
-    def start_engine(self, spm_path=None):
+    def start_engine(self, spm_path=None, timeout=None):
         """
         Start the MATLAB engine and initialize SPM
         
         Args:
             spm_path: Path to SPM installation directory
+            timeout: Timeout for starting the MATLAB engine
         
         Returns:
             bool: True if successful, False otherwise
@@ -51,31 +52,41 @@ class MatlabEngine(QObject):
         self.logger.info("Starting MATLAB engine...")
         
         try:
-            self._engine = matlab.engine.start_matlab()
-            
-            # Set SPM path (default to parent directory if not specified)
-            if spm_path is None:
-                # Assuming SPM is in the parent directory of the current script
-                self._spm_path = os.path.abspath(os.path.join(
-                    os.path.dirname(os.path.dirname(__file__)), '..'
-                ))
-            else:
-                self._spm_path = spm_path
+            with tqdm.tqdm(total=100, desc="Starting MATLAB engine") as pbar:
+                self._engine = matlab.engine.start_matlab()
+                pbar.update(20)
                 
-            self.logger.info(f"Using SPM path: {self._spm_path}")
-            
-            # Add SPM to MATLAB path
-            self._engine.addpath(self._spm_path)
-            self._engine.addpath(os.path.join(self._spm_path, 'toolbox'))
-            
-            # Initialize SPM
-            self._engine.eval("spm('defaults', 'PET');", nargout=0)
-            self._engine.eval("spm_jobman('initcfg');", nargout=0)
-            
-            self.logger.info("MATLAB engine started successfully")
-            self.engine_started.emit()
-            return True
-            
+                # Wait for the engine to start with a timeout
+                if timeout:
+                    self._engine.eval("disp('MATLAB engine started')", nargout=0)
+                pbar.update(20)
+                
+                # Set SPM path (default to parent directory if not specified)
+                if spm_path is None:
+                    # Assuming SPM is in the parent directory of the current script
+                    self._spm_path = os.path.abspath(os.path.join(
+                        os.path.dirname(os.path.dirname(__file__)), '..'
+                    ))
+                else:
+                    self._spm_path = spm_path
+                pbar.update(20)
+                    
+                self.logger.info(f"Using SPM path: {self._spm_path}")
+                
+                # Add SPM to MATLAB path
+                self._engine.addpath(self._spm_path)
+                self._engine.addpath(os.path.join(self._spm_path, 'toolbox'))
+                pbar.update(20)
+                
+                # Initialize SPM
+                self._engine.eval("spm('defaults', 'PET');", nargout=0)
+                self._engine.eval("spm_jobman('initcfg');", nargout=0)
+                pbar.update(20)
+                
+                self.logger.info("MATLAB engine started successfully")
+                self.engine_started.emit()
+                return True
+                
         except Exception as e:
             error_msg = f"Failed to start MATLAB engine: {str(e)}"
             self.logger.error(error_msg)
@@ -486,4 +497,4 @@ class MatlabEngine(QObject):
             self.logger.error(error_msg)
             self.engine_error.emit(error_msg)
             self.operation_completed.emit("Conversion failed", False)
-            return [] 
+            return []
