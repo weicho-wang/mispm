@@ -18,6 +18,8 @@ sys.path.append(os.path.join(project_root, "core"))  # Ensure this path is corre
 
 from mispmsrc.core.matlab_engine import MatlabEngine
 from mispmsrc.utils.logger import Logger
+from mispmsrc.ui.progress_manager import ProgressManager
+from mispmsrc.ui.coreg_dialog import CoregisterDialog
 
 class LogWidget(QTextEdit):
     """Widget to display log messages"""
@@ -73,27 +75,40 @@ class MainWindow(QMainWindow):
         """Set up the UI components"""
         # Set window properties
         self.setWindowTitle("SPM PyQt Interface")
-        self.setMinimumSize(800, 800)  # Reduced width since we removed right panel
+        self.setMinimumSize(1200, 700)  # 增加窗口宽度以容纳右侧面板
         
-        # Create central widget
+        # Create central widget with horizontal layout
         central_widget = QWidget()
-        main_layout = QVBoxLayout(central_widget)
+        main_layout = QHBoxLayout(central_widget)  # 改为水平布局
+        main_layout.setSpacing(5)
+        main_layout.setContentsMargins(5, 5, 5, 5)
         
-        # Left panel - Controls (now main panel)
-        main_panel = QWidget()
-        layout = QVBoxLayout(main_panel)
+        # Left panel for controls
+        left_panel = QWidget()
+        left_layout = QVBoxLayout(left_panel)
+        left_layout.setSpacing(5)
+        left_layout.setContentsMargins(2, 2, 2, 2)
         
         # Group box for MATLAB engine
         engine_group = QGroupBox("MATLAB Engine")
+        engine_group.setFlat(True)  # 使分组框更扁平
         engine_layout = QVBoxLayout()
-        self.start_engine_btn = QPushButton("Start MATLAB Engine")
-        self.stop_engine_btn = QPushButton("Stop MATLAB Engine")
-        self.engine_status_label = QLabel("MATLAB Engine: Not running")
+        engine_layout.setSpacing(3)  # 减小间距
+        engine_layout.setContentsMargins(5, 5, 5, 5)  # 减小边距
+        self.start_engine_btn = QPushButton("Start Engine")  # 简化按钮文字
+        self.stop_engine_btn = QPushButton("Stop Engine")
+        self.engine_status_label = QLabel("Engine: Not running")  # 简化标签文字
+        
+        # 设置按钮属性
+        for btn in [self.start_engine_btn, self.stop_engine_btn]:
+            btn.setFixedHeight(25)  # 减小按钮高度
+            btn.setFixedWidth(120)  # 限制按钮宽度
+        
         engine_layout.addWidget(self.engine_status_label)
-        engine_layout.addWidget(self.start_engine_btn)
-        engine_layout.addWidget(self.stop_engine_btn)
+        engine_layout.addWidget(self.start_engine_btn, 0, Qt.AlignLeft)  # 左对齐
+        engine_layout.addWidget(self.stop_engine_btn, 0, Qt.AlignLeft)
         engine_group.setLayout(engine_layout)
-        layout.addWidget(engine_group)
+        left_layout.addWidget(engine_group)
         
         # Group box for DICOM conversion
         dicom_group = QGroupBox("DICOM/NIFTI Import")
@@ -102,7 +117,7 @@ class MainWindow(QMainWindow):
         self.import_dicom_btn.setFixedHeight(32)
         dicom_layout.addWidget(self.import_dicom_btn)
         dicom_group.setLayout(dicom_layout)
-        layout.addWidget(dicom_group)
+        left_layout.addWidget(dicom_group)
         
         # Group box for image manipulation
         self.image_group = QGroupBox("Image Processing")
@@ -113,32 +128,17 @@ class MainWindow(QMainWindow):
         self.load_nifti_btn.setFixedHeight(32)
         image_layout.addWidget(self.load_nifti_btn)
         
-        # Coregistration section
-        coreg_layout = QVBoxLayout()
+        # Coregistration section - 移除下拉菜单，简化布局
         self.coregister_btn = QPushButton("Coregistration")
-        self.coregister_btn.setFixedHeight(32)
-        self.coreg_method_combo = QComboBox()
-        self.coreg_method_combo.addItems([
-            "Mutual Information",
-            "Normalised Mutual Information",
-            "Entropy Correlation Coefficient",
-            "Normalised Cross Correlation"
-        ])
-        self.coreg_method_combo.setFixedHeight(32)
-        coreg_layout.addWidget(self.coregister_btn)
-        coreg_layout.addWidget(self.coreg_method_combo)
-        image_layout.addLayout(coreg_layout)
+        self.coregister_btn.setFixedHeight(25)
+        self.coregister_btn.setFixedWidth(120)
+        image_layout.addWidget(self.coregister_btn, 0, Qt.AlignLeft)
         
-        # Normalisation section
-        normalise_layout = QVBoxLayout()
+        # Normalisation section - 移除下拉菜单，简化布局
         self.normalise_btn = QPushButton("Normalise")
-        self.normalise_btn.setFixedHeight(32)
-        self.norm_method_combo = QComboBox()
-        self.norm_method_combo.addItems(["Standard", "Template", "Individual"])
-        self.norm_method_combo.setFixedHeight(32)
-        normalise_layout.addWidget(self.normalise_btn)
-        normalise_layout.addWidget(self.norm_method_combo)
-        image_layout.addLayout(normalise_layout)
+        self.normalise_btn.setFixedHeight(25)
+        self.normalise_btn.setFixedWidth(120)
+        image_layout.addWidget(self.normalise_btn, 0, Qt.AlignLeft)
         
         # Other buttons
         self.set_origin_btn = QPushButton("Set Origin")
@@ -149,12 +149,12 @@ class MainWindow(QMainWindow):
         image_layout.addWidget(self.check_reg_btn)
         
         self.image_group.setLayout(image_layout)
-        layout.addWidget(self.image_group)
+        left_layout.addWidget(self.image_group)
         
         # Add run script button
         self.run_script_btn = QPushButton("Run MATLAB Script")
         self.run_script_btn.setFixedHeight(32)
-        layout.addWidget(self.run_script_btn)
+        left_layout.addWidget(self.run_script_btn)
         
         # Add log viewer
         log_group = QGroupBox("Log")
@@ -162,10 +162,31 @@ class MainWindow(QMainWindow):
         self.log_widget = LogWidget()
         log_layout.addWidget(self.log_widget)
         log_group.setLayout(log_layout)
-        layout.addWidget(log_group)
+        left_layout.addWidget(log_group)
         
-        # Add main panel to main layout
-        main_layout.addWidget(main_panel)
+        # Add left panel to main layout
+        main_layout.addWidget(left_panel)
+        
+        # Right panel for SPM windows
+        right_panel = QWidget()
+        right_layout = QVBoxLayout(right_panel)
+        right_layout.setSpacing(0)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Add title label
+        right_title = QLabel("SPM Batch Editor")
+        right_title.setAlignment(Qt.AlignCenter)
+        right_title.setStyleSheet("font-weight: bold; padding: 5px;")
+        right_layout.addWidget(right_title)
+        
+        # Add container widget for SPM windows
+        self.spm_container = QWidget()
+        self.spm_container.setStyleSheet("background-color: white;")
+        self.spm_container.setMinimumWidth(400)
+        right_layout.addWidget(self.spm_container)
+        
+        # Add right panel to main layout
+        main_layout.addWidget(right_panel)
         
         # Set central widget
         self.setCentralWidget(central_widget)
@@ -176,13 +197,69 @@ class MainWindow(QMainWindow):
         
         # Add progress bar to status bar
         self.progress_bar = QProgressBar()
+        self.progress_bar.setFixedHeight(15)  # 减小进度条高度
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
         self.progress_bar.setVisible(False)
+        self.progress_bar.setTextVisible(True)  # 显示进度文字
         self.statusBar.addPermanentWidget(self.progress_bar)
         
         # Set initial button states
         self.update_button_states(False)
+        
+        # 创建进度管理器
+        self.progress_manager = ProgressManager(self.progress_bar, self.statusBar)
+        
+        # 创建按钮列表以统一设置样式
+        all_buttons = [
+            self.start_engine_btn, 
+            self.stop_engine_btn,
+            self.import_dicom_btn,
+            self.load_nifti_btn,
+            self.coregister_btn,
+            self.normalise_btn,
+            self.set_origin_btn,
+            self.check_reg_btn,
+            self.run_script_btn
+        ]
+        
+        # 统一设置所有按钮的样式
+        for btn in all_buttons:
+            btn.setFixedHeight(25)  # 统一高度
+            btn.setFixedWidth(120)  # 统一宽度
+        
+        # 修改布局对齐方式
+        engine_layout.addWidget(self.engine_status_label)
+        engine_layout.addWidget(self.start_engine_btn, 0, Qt.AlignLeft)
+        engine_layout.addWidget(self.stop_engine_btn, 0, Qt.AlignLeft)
+        
+        # DICOM转换布局修改
+        dicom_layout.addWidget(self.import_dicom_btn, 0, Qt.AlignLeft)
+        
+        # Load NIFTI按钮布局修改
+        image_layout.addWidget(self.load_nifti_btn, 0, Qt.AlignLeft)
+        
+        # Coregistration布局修改
+        coreg_layout = QHBoxLayout()
+        coreg_layout.addWidget(self.coregister_btn, 0)
+        coreg_layout.addStretch(1)
+        image_layout.addLayout(coreg_layout)
+        
+        # Normalisation布局修改
+        normalise_layout = QHBoxLayout()
+        normalise_layout.addWidget(self.normalise_btn, 0)
+        normalise_layout.addStretch(1)
+        image_layout.addLayout(normalise_layout)
+        
+        # Set Origin和Check Registration按钮布局修改
+        other_btns_layout = QHBoxLayout()
+        other_btns_layout.addWidget(self.set_origin_btn, 0)
+        other_btns_layout.addWidget(self.check_reg_btn, 0)
+        other_btns_layout.addStretch(1)
+        image_layout.addLayout(other_btns_layout)
+        
+        # Run MATLAB Script按钮布局修改
+        left_layout.addWidget(self.run_script_btn, 0, Qt.AlignLeft)
     
     def connect_signals(self):
         """Connect UI signals to slots"""
@@ -502,142 +579,183 @@ class MainWindow(QMainWindow):
     
     @pyqtSlot()
     def coregister_images(self):
-        """Coregister two images"""
-        self.log_widget.append_log("Selecting reference image...")
-        
-        # Get reference image from user
-        ref_image, _ = QFileDialog.getOpenFileName(
-            self, "Select Reference Image", "", "NIFTI Files (*.nii *.nii.gz *.img);;All Files (*)"
-        )
-        
-        if not ref_image:
-            self.log_widget.append_log("Coregistration cancelled")
-            return
-            
-        self.log_widget.append_log(f"Selected reference image: {ref_image}")
-        
-        # Get source image from user
-        source_image, _ = QFileDialog.getOpenFileName(
-            self, "Select Source Image to Coregister", "", "NIFTI Files (*.nii *.nii.gz *.img);;All Files (*)"
-        )
-        
-        if not source_image:
-            self.log_widget.append_log("Coregistration cancelled")
-            return
-            
-        self.log_widget.append_log(f"Selected source image: {source_image}")
-        
-        # Get selected cost function
-        cost_function_idx = self.coreg_method_combo.currentIndex()
-        cost_functions = ["mi", "nmi", "ecc", "ncc"]
-        cost_function = cost_functions[cost_function_idx]
-        
-        self.log_widget.append_log(f"Using cost function: {self.coreg_method_combo.currentText()} ({cost_function})")
-        
-        # Coregister images
-        try:
-            success = self.matlab_engine.coregister_images(ref_image, source_image, cost_function)
-            
-            if success:
-                self.log_widget.append_log("Coregistration completed successfully", "SUCCESS")
-                
-                # Get the path to the coregistered image
-                source_dir = os.path.dirname(source_image)
-                source_name = os.path.basename(source_image)
-                coregistered_image = os.path.join(source_dir, f"r{source_name}")
-                
-                # Ask user if they want to load the coregistered image
-                if QMessageBox.question(
-                    self,
-                    "Load Coregistered Image",
-                    "Do you want to load the coregistered image?",
-                    QMessageBox.Yes | QMessageBox.No
-                ) == QMessageBox.Yes:
-                    self.image_view.display_image(coregistered_image)
-            else:
-                self.log_widget.append_log("Coregistration failed", "ERROR")
-                
-        except Exception as e:
-            self.log_widget.append_log(f"Error during coregistration: {str(e)}", "ERROR")
-            QMessageBox.critical(self, "Error", f"Failed to coregister images: {str(e)}")
+        """启动协配对话框"""
+        dialog = CoregisterDialog(self)
+        dialog.coregister_started.connect(self._execute_coregistration)
+        dialog.exec_()
     
+    def _execute_coregistration(self, params):
+        """Execute coregistration operation"""
+        self.progress_manager.start_operation("Coregistration")
+        steps = self.progress_manager.get_operation_steps('coregister')
+        
+        try:
+            msg, val = steps['init']
+            self.progress_manager.update_progress(msg, val)
+            
+            # Initialize SPM
+            self.matlab_engine._engine.eval("spm('defaults','pet');", nargout=0)
+            self.matlab_engine._engine.eval("spm_jobman('initcfg');", nargout=0)
+            self.matlab_engine._engine.eval("clear matlabbatch;", nargout=0)
+            
+            # Fix paths for MATLAB - handle backslashes separately
+            ref_path = params['ref_image'].replace('\\', '/')
+            source_path = params['source_image'].replace('\\', '/')
+            
+            # Build base structure
+            cmd = [
+                "matlabbatch = {};",
+                "matlabbatch{1}.spm.spatial.coreg.estwrite = struct();",
+                "matlabbatch{1}.spm.spatial.coreg.estwrite.ref = {};",
+                "matlabbatch{1}.spm.spatial.coreg.estwrite.source = {};",
+                "matlabbatch{1}.spm.spatial.coreg.estwrite.other = {};",
+                "matlabbatch{1}.spm.spatial.coreg.estwrite.eoptions = struct();",
+                "matlabbatch{1}.spm.spatial.coreg.estwrite.roptions = struct();",
+                "matlabbatch{1}.spm.spatial.coreg.estwrite.ref = {{'" + ref_path + ",1'}};",
+                "matlabbatch{1}.spm.spatial.coreg.estwrite.source = {{'" + source_path + ",1'}};"
+            ]
+            self.matlab_engine._engine.eval("\n".join(cmd), nargout=0)
+            
+            # Handle other images
+            if params['other_images']:
+                # Handle backslashes before string formatting
+                other_files = []
+                for f in params['other_images']:
+                    if f:
+                        fixed_path = f.replace('\\', '/')
+                        other_files.append("'" + fixed_path + ",1'")
+                
+                if other_files:
+                    cmd = "matlabbatch{1}.spm.spatial.coreg.estwrite.other = {" + ",".join(other_files) + "};"
+                else:
+                    cmd = "matlabbatch{1}.spm.spatial.coreg.estwrite.other = {''};"
+            else:
+                cmd = "matlabbatch{1}.spm.spatial.coreg.estwrite.other = {''};"
+            self.matlab_engine._engine.eval(cmd, nargout=0)
+            
+            # Map cost function
+            cost_function_map = {
+                'Mutual Information': 'mi',
+                'Normalised Mutual Information': 'nmi',
+                'Entropy Correlation Coefficient': 'ecc',
+                'Normalised Cross Correlation': 'ncc'
+            }
+            cost_fun = cost_function_map.get(params['cost_function'], 'nmi')
+            
+            # Set estimation options
+            cmd = [
+                "matlabbatch{1}.spm.spatial.coreg.estwrite.eoptions.cost_fun = '" + cost_fun + "';",
+                "matlabbatch{1}.spm.spatial.coreg.estwrite.eoptions.sep = [" + str(params['separation']) + "];",
+                "matlabbatch{1}.spm.spatial.coreg.estwrite.eoptions.tol = [0.02 0.02 0.02 0.001 0.001 0.001 0.01 0.01 0.01 0.001 0.001 0.001];",
+                "matlabbatch{1}.spm.spatial.coreg.estwrite.eoptions.fwhm = [" + str(params['fwhm']) + " " + str(params['fwhm']) + "];"
+            ]
+            self.matlab_engine._engine.eval("\n".join(cmd), nargout=0)
+            
+            # Set reslice options
+            wraps = " ".join(str(int(x)) for x in params['wrap'])
+            cmd = [
+                "matlabbatch{1}.spm.spatial.coreg.estwrite.roptions.interp = " + str(params['interpolation']) + ";",
+                "matlabbatch{1}.spm.spatial.coreg.estwrite.roptions.wrap = [" + wraps + "];",
+                "matlabbatch{1}.spm.spatial.coreg.estwrite.roptions.mask = " + str(int(params['mask'])) + ";",
+                "matlabbatch{1}.spm.spatial.coreg.estwrite.roptions.prefix = '" + params['prefix'] + "';"
+            ]
+            self.matlab_engine._engine.eval("\n".join(cmd), nargout=0)
+            
+            # Run coregistration
+            self.matlab_engine._engine.eval("spm_jobman('run',matlabbatch);", nargout=0)
+            
+            # Show results
+            source_dir = os.path.dirname(params['source_image'])
+            source_name = os.path.basename(params['source_image'])
+            resliced_file = os.path.join(source_dir, params['prefix'] + source_name)
+            
+            # Convert paths for MATLAB
+            ref_display = params['ref_image'].replace('\\', '/')
+            resliced_display = resliced_file.replace('\\', '/')
+            
+            # Display results
+            cmd = [
+                "spm_figure('GetWin','Graphics');",
+                "spm_figure('Clear','Graphics');",
+                "spm_check_registration('" + ref_display + "','" + resliced_display + "');"
+            ]
+            self.matlab_engine._engine.eval("\n".join(cmd), nargout=0)
+            
+            msg, val = steps['complete']
+            self.progress_manager.update_progress(msg, val)
+            self.progress_manager.complete_operation("Coregistration completed successfully", True)
+            
+        except Exception as e:
+            self.progress_manager.complete_operation(f"Coregistration failed: {str(e)}", False)
+            self.log_widget.append_log(f"Error during coregistration: {str(e)}", "ERROR")
+            QMessageBox.critical(self, "Error", f"Coregistration failed: {str(e)}")
+
     @pyqtSlot()
     def normalise_image(self):
-        """Normalise an image to a template"""
-        self.log_widget.append_log("Selecting image to normalise...")
+        """Normalize image using SPM batch editor"""
+        self.progress_manager.start_operation("Normalization")
+        steps = self.progress_manager.get_operation_steps('normalize')
         
-        # Get source image from user
-        source_image, _ = QFileDialog.getOpenFileName(
-            self, "Select Image to Normalise", "", "NIFTI Files (*.nii *.nii.gz *.img);;All Files (*)"
-        )
-        
-        if not source_image:
-            self.log_widget.append_log("Normalisation cancelled")
-            return
-            
-        self.log_widget.append_log(f"Selected image to normalise: {source_image}")
-        
-        # Get normalization method
-        norm_method_idx = self.norm_method_combo.currentIndex()
-        norm_methods = ["standard", "template", "individual"]
-        norm_method = norm_methods[norm_method_idx]
-        
-        self.log_widget.append_log(f"Using normalization method: {self.norm_method_combo.currentText()} ({norm_method})")
-        
-        template_image = None
-        
-        if norm_method == "template":
-            # Ask user to select a template
-            template_image, _ = QFileDialog.getOpenFileName(
-                self, "Select Template Image", "", "NIFTI Files (*.nii *.nii.gz *.img);;All Files (*)"
-            )
-            
-            if not template_image:
-                self.log_widget.append_log("Using default SPM template")
-            else:
-                self.log_widget.append_log(f"Selected template image: {template_image}")
-        elif norm_method == "individual":
-            # For individual method, we need both a source and a reference image
-            ref_image, _ = QFileDialog.getOpenFileName(
-                self, "Select Reference Image for Normalization", "", "NIFTI Files (*.nii *.nii.gz *.img);;All Files (*)"
-            )
-            
-            if not ref_image:
-                self.log_widget.append_log("Normalization cancelled - reference image required for individual method")
-                return
-                
-            self.log_widget.append_log(f"Selected reference image: {ref_image}")
-            template_image = ref_image
-        else:
-            self.log_widget.append_log("Using default SPM template")
-        
-        # Normalise image
         try:
-            success = self.matlab_engine.normalize_image(source_image, template_image, norm_method)
+            msg, val = steps['init']
+            self.progress_manager.update_progress(msg, val)
             
-            if success:
-                self.log_widget.append_log("Normalisation completed successfully", "SUCCESS")
-                
-                # Get the path to the normalised image
-                source_dir = os.path.dirname(source_image)
-                source_name = os.path.basename(source_image)
-                normalised_image = os.path.join(source_dir, f"w{source_name}")
-                
-                # Ask user if they want to load the normalised image
-                if QMessageBox.question(
-                    self,
-                    "Load Normalised Image",
-                    "Do you want to load the normalised image?",
-                    QMessageBox.Yes | QMessageBox.No
-                ) == QMessageBox.Yes:
-                    self.image_view.display_image(normalised_image)
-            else:
-                self.log_widget.append_log("Normalisation failed", "ERROR")
-                
+            # Initialize SPM with defaults and cfg
+            self.matlab_engine._engine.eval("spm('defaults','pet');", nargout=0)
+            self.matlab_engine._engine.eval("spm_jobman('initcfg');", nargout=0)
+            
+            # Get container window size and position
+            container_size = self.spm_container.size()
+            container_pos = self.spm_container.mapToGlobal(self.spm_container.pos())
+            
+            # Set SPM figure properties for embedding
+            self.matlab_engine._engine.eval(f"""
+                global defaults;
+                defaults.ui.monitor = 1;
+                defaults.ui.position = ['{container_pos.x()}' '{container_pos.y()}' '{container_size.width()}' '{container_size.height()}'];
+            """, nargout=0)
+            
+            # Clear any existing jobs and create windows
+            self.matlab_engine._engine.eval("clear matlabbatch;", nargout=0)
+            self.matlab_engine._engine.eval("spm_figure('DeleteAll');", nargout=0)
+            
+            # Create the matlabbatch structure for normalization
+            self.matlab_engine._engine.eval("""
+                matlabbatch{1}.spm.spatial.normalise.estwrite = struct;
+                matlabbatch{1}.spm.spatial.normalise.estwrite.subj.vol = {''};
+                matlabbatch{1}.spm.spatial.normalise.estwrite.subj.resample = {''};
+                matlabbatch{1}.spm.spatial.normalise.estwrite.eoptions.template = {fullfile(spm('Dir'),'toolbox','OldNorm','T1.nii')};
+                matlabbatch{1}.spm.spatial.normalise.estwrite.eoptions.weight = '';
+                matlabbatch{1}.spm.spatial.normalise.estwrite.eoptions.smosrc = 8;
+                matlabbatch{1}.spm.spatial.normalise.estwrite.eoptions.smoref = 0;
+                matlabbatch{1}.spm.spatial.normalise.estwrite.eoptions.regtype = 'mni';
+                matlabbatch{1}.spm.spatial.normalise.estwrite.eoptions.cutoff = 25;
+                matlabbatch{1}.spm.spatial.normalise.estwrite.eoptions.nits = 16;
+                matlabbatch{1}.spm.spatial.normalise.estwrite.eoptions.reg = 1;
+                matlabbatch{1}.spm.spatial.normalise.estwrite.roptions.preserve = 0;
+                matlabbatch{1}.spm.spatial.normalise.estwrite.roptions.bb = [-78 -112 -70; 78 76 85];
+                matlabbatch{1}.spm.spatial.normalise.estwrite.roptions.vox = [2 2 2];
+                matlabbatch{1}.spm.spatial.normalise.estwrite.roptions.interp = 1;
+                matlabbatch{1}.spm.spatial.normalise.estwrite.roptions.wrap = [0 0 0];
+                matlabbatch{1}.spm.spatial.normalise.estwrite.roptions.prefix = 'w';
+            """, nargout=0)
+            
+            # Create windows in container and launch batch editor
+            self.matlab_engine._engine.eval("""
+                fg = spm_figure('Create', 'Graphics');
+                set(fg, 'MenuBar', 'none', 'Toolbar', 'none', 'Resize', 'off');
+                spm_jobman('interactive', matlabbatch);
+            """, nargout=0)
+            
+            msg, val = steps['complete']
+            self.progress_manager.update_progress(msg, val)
+            self.progress_manager.complete_operation("SPM Normalisation window opened", True)
+            
         except Exception as e:
-            self.log_widget.append_log(f"Error during normalisation: {str(e)}", "ERROR")
-            QMessageBox.critical(self, "Error", f"Failed to normalise image: {str(e)}")
-    
+            self.progress_manager.complete_operation(f"Failed to open SPM Normalisation: {str(e)}", False)
+            self.log_widget.append_log(f"Error launching SPM Normalisation: {str(e)}", "ERROR")
+            QMessageBox.critical(self, "Error", f"Failed to open SPM Normalisation: {str(e)}")
+
     @pyqtSlot()
     def set_origin(self):
         """Set the origin of an image"""
