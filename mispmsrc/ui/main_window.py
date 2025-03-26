@@ -20,6 +20,8 @@ from mispmsrc.core.matlab_engine import MatlabEngine
 from mispmsrc.utils.logger import Logger
 from mispmsrc.ui.progress_manager import ProgressManager
 from mispmsrc.ui.coreg_dialog import CoregisterDialog
+from mispmsrc.ui.normalize_dialog import NormalizeDialog
+from mispmsrc.ui.image_view import ImageView  # Add this import near other imports
 
 class LogWidget(QTextEdit):
     """Widget to display log messages"""
@@ -60,6 +62,9 @@ class MainWindow(QMainWindow):
         
         # Initialize MATLAB engine
         self.matlab_engine = MatlabEngine()
+        
+        # Add ImageView instance
+        self.image_view = ImageView(self)
         
         # Set up UI
         self.run_script_btn = QPushButton("Run MATLAB Script")
@@ -183,7 +188,7 @@ class MainWindow(QMainWindow):
         self.spm_container = QWidget()
         self.spm_container.setStyleSheet("background-color: white;")
         self.spm_container.setMinimumWidth(400)
-        right_layout.addWidget(self.spm_container)
+        right_layout.addWidget(self.image_view)  # Replace the spm_container with ImageView in right_layout
         
         # Add right panel to main layout
         main_layout.addWidget(right_panel)
@@ -593,45 +598,27 @@ class MainWindow(QMainWindow):
             msg, val = steps['init']
             self.progress_manager.update_progress(msg, val)
             
-            # Initialize SPM
+            # Initialize SPM and clear existing jobs
             self.matlab_engine._engine.eval("spm('defaults','pet');", nargout=0)
             self.matlab_engine._engine.eval("spm_jobman('initcfg');", nargout=0)
             self.matlab_engine._engine.eval("clear matlabbatch;", nargout=0)
             
-            # Fix paths for MATLAB - handle backslashes separately
+            # Fix paths for MATLAB
             ref_path = params['ref_image'].replace('\\', '/')
             source_path = params['source_image'].replace('\\', '/')
             
-            # Build base structure
+            # Create job structure step by step
             cmd = [
-                "matlabbatch = {};",
-                "matlabbatch{1}.spm.spatial.coreg.estwrite = struct();",
-                "matlabbatch{1}.spm.spatial.coreg.estwrite.ref = {};",
-                "matlabbatch{1}.spm.spatial.coreg.estwrite.source = {};",
-                "matlabbatch{1}.spm.spatial.coreg.estwrite.other = {};",
-                "matlabbatch{1}.spm.spatial.coreg.estwrite.eoptions = struct();",
-                "matlabbatch{1}.spm.spatial.coreg.estwrite.roptions = struct();",
-                "matlabbatch{1}.spm.spatial.coreg.estwrite.ref = {{'" + ref_path + ",1'}};",
-                "matlabbatch{1}.spm.spatial.coreg.estwrite.source = {{'" + source_path + ",1'}};"
+                "matlabbatch{1}.spm.spatial.coreg.estwrite.ref = {'" + ref_path + ",1'};",
+                "matlabbatch{1}.spm.spatial.coreg.estwrite.source = {'" + source_path + ",1'};"
             ]
-            self.matlab_engine._engine.eval("\n".join(cmd), nargout=0)
             
             # Handle other images
-            if params['other_images']:
-                # Handle backslashes before string formatting
-                other_files = []
-                for f in params['other_images']:
-                    if f:
-                        fixed_path = f.replace('\\', '/')
-                        other_files.append("'" + fixed_path + ",1'")
-                
-                if other_files:
-                    cmd = "matlabbatch{1}.spm.spatial.coreg.estwrite.other = {" + ",".join(other_files) + "};"
-                else:
-                    cmd = "matlabbatch{1}.spm.spatial.coreg.estwrite.other = {''};"
+            if params['other_images'] and params['other_images'][0]:  # Check if list is not empty and first item is not empty
+                other_files = ["'" + f.replace('\\', '/') + ",1'" for f in params['other_images']]
+                cmd.append("matlabbatch{1}.spm.spatial.coreg.estwrite.other = {" + " ".join(other_files) + "};")
             else:
-                cmd = "matlabbatch{1}.spm.spatial.coreg.estwrite.other = {''};"
-            self.matlab_engine._engine.eval(cmd, nargout=0)
+                cmd.append("matlabbatch{1}.spm.spatial.coreg.estwrite.other = {''};")
             
             # Map cost function
             cost_function_map = {
@@ -642,44 +629,42 @@ class MainWindow(QMainWindow):
             }
             cost_fun = cost_function_map.get(params['cost_function'], 'nmi')
             
-            # Set estimation options
-            cmd = [
+            # Add estimation options
+            est_cmd = [
                 "matlabbatch{1}.spm.spatial.coreg.estwrite.eoptions.cost_fun = '" + cost_fun + "';",
                 "matlabbatch{1}.spm.spatial.coreg.estwrite.eoptions.sep = [" + str(params['separation']) + "];",
                 "matlabbatch{1}.spm.spatial.coreg.estwrite.eoptions.tol = [0.02 0.02 0.02 0.001 0.001 0.001 0.01 0.01 0.01 0.001 0.001 0.001];",
                 "matlabbatch{1}.spm.spatial.coreg.estwrite.eoptions.fwhm = [" + str(params['fwhm']) + " " + str(params['fwhm']) + "];"
             ]
-            self.matlab_engine._engine.eval("\n".join(cmd), nargout=0)
+            cmd.extend(est_cmd)
             
-            # Set reslice options
+            # Add reslice options
             wraps = " ".join(str(int(x)) for x in params['wrap'])
-            cmd = [
+            reslice_cmd = [
                 "matlabbatch{1}.spm.spatial.coreg.estwrite.roptions.interp = " + str(params['interpolation']) + ";",
                 "matlabbatch{1}.spm.spatial.coreg.estwrite.roptions.wrap = [" + wraps + "];",
                 "matlabbatch{1}.spm.spatial.coreg.estwrite.roptions.mask = " + str(int(params['mask'])) + ";",
                 "matlabbatch{1}.spm.spatial.coreg.estwrite.roptions.prefix = '" + params['prefix'] + "';"
             ]
-            self.matlab_engine._engine.eval("\n".join(cmd), nargout=0)
+            cmd.extend(reslice_cmd)
             
+            # Execute all commands
+            for c in cmd:
+                self.matlab_engine._engine.eval(c, nargout=0)
+                
             # Run coregistration
             self.matlab_engine._engine.eval("spm_jobman('run',matlabbatch);", nargout=0)
             
-            # Show results
+            # Get the output file path
             source_dir = os.path.dirname(params['source_image'])
             source_name = os.path.basename(params['source_image'])
             resliced_file = os.path.join(source_dir, params['prefix'] + source_name)
             
-            # Convert paths for MATLAB
-            ref_display = params['ref_image'].replace('\\', '/')
-            resliced_display = resliced_file.replace('\\', '/')
-            
             # Display results
-            cmd = [
-                "spm_figure('GetWin','Graphics');",
-                "spm_figure('Clear','Graphics');",
-                "spm_check_registration('" + ref_display + "','" + resliced_display + "');"
-            ]
-            self.matlab_engine._engine.eval("\n".join(cmd), nargout=0)
+            self.matlab_engine._engine.eval("spm_figure('GetWin','Graphics');", nargout=0)
+            self.matlab_engine._engine.eval("spm_figure('Clear','Graphics');", nargout=0)
+            display_cmd = "spm_check_registration('" + ref_path + "','" + resliced_file.replace('\\', '/') + "');"
+            self.matlab_engine._engine.eval(display_cmd, nargout=0)
             
             msg, val = steps['complete']
             self.progress_manager.update_progress(msg, val)
@@ -692,7 +677,13 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot()
     def normalise_image(self):
-        """Normalize image using SPM batch editor"""
+        """启动标准化对话框"""
+        dialog = NormalizeDialog(self)
+        dialog.normalize_started.connect(self._execute_normalization)
+        dialog.exec_()
+
+    def _execute_normalization(self, params):
+        """执行标准化操作"""
         self.progress_manager.start_operation("Normalization")
         steps = self.progress_manager.get_operation_steps('normalize')
         
@@ -700,61 +691,103 @@ class MainWindow(QMainWindow):
             msg, val = steps['init']
             self.progress_manager.update_progress(msg, val)
             
-            # Initialize SPM with defaults and cfg
+            # Initialize SPM with defaults
+            self.matlab_engine._engine.eval("clear matlabbatch;", nargout=0)
             self.matlab_engine._engine.eval("spm('defaults','pet');", nargout=0)
             self.matlab_engine._engine.eval("spm_jobman('initcfg');", nargout=0)
             
-            # Get container window size and position
-            container_size = self.spm_container.size()
-            container_pos = self.spm_container.mapToGlobal(self.spm_container.pos())
+            # Fix paths for MATLAB
+            source_path = params['source_image'].replace('\\', '/')
             
-            # Set SPM figure properties for embedding
+            # Use default template if none specified
+            if not params['template']:
+                template_path = os.path.join(
+                    self.matlab_engine._spm_path,
+                    'toolbox', 'OldNorm', 'T1.nii'
+                ).replace('\\', '/')
+            else:
+                template_path = params['template'].replace('\\', '/')
+            
+            # Initialize matlabbatch structure
+            self.matlab_engine._engine.eval("""
+            matlabbatch = {};
+            matlabbatch{1}.spm.tools.oldnorm.est = struct;
+            matlabbatch{1}.spm.tools.oldnorm.est.subj.source = {''};
+            matlabbatch{1}.spm.tools.oldnorm.est.subj.wtsrc = '';
+            matlabbatch{1}.spm.tools.oldnorm.est.eoptions = struct('template',{{''}});
+            """, nargout=0)
+            
+            # Set source and template
             self.matlab_engine._engine.eval(f"""
-                global defaults;
-                defaults.ui.monitor = 1;
-                defaults.ui.position = ['{container_pos.x()}' '{container_pos.y()}' '{container_size.width()}' '{container_size.height()}'];
+            matlabbatch{{1}}.spm.tools.oldnorm.est.subj.source = {{'{source_path},1'}};
+            matlabbatch{{1}}.spm.tools.oldnorm.est.eoptions.template = {{'{template_path},1'}};
             """, nargout=0)
             
-            # Clear any existing jobs and create windows
-            self.matlab_engine._engine.eval("clear matlabbatch;", nargout=0)
-            self.matlab_engine._engine.eval("spm_figure('DeleteAll');", nargout=0)
+            # Set estimation options
+            self.matlab_engine._engine.eval(f"""
+            matlabbatch{{1}}.spm.tools.oldnorm.est.eoptions.weight = '';
+            matlabbatch{{1}}.spm.tools.oldnorm.est.eoptions.smosrc = {params['source_smoothing']};
+            matlabbatch{{1}}.spm.tools.oldnorm.est.eoptions.smoref = {params['template_smoothing']};
+            matlabbatch{{1}}.spm.tools.oldnorm.est.eoptions.regtype = '{params['affine_regularization']}';
+            matlabbatch{{1}}.spm.tools.oldnorm.est.eoptions.cutoff = {params['nonlinear_cutoff']};
+            matlabbatch{{1}}.spm.tools.oldnorm.est.eoptions.nits = {params['nonlinear_iterations']};
+            matlabbatch{{1}}.spm.tools.oldnorm.est.eoptions.reg = {params['nonlinear_regularization']};
+            """, nargout=0)
             
-            # Create the matlabbatch structure for normalization
+            # Add optional weights if provided
+            if params['source_weight']:
+                weight_path = params['source_weight'].replace('\\', '/')
+                self.matlab_engine._engine.eval(
+                    f"matlabbatch{{1}}.spm.tools.oldnorm.est.subj.wtsrc = {{'{weight_path},1'}};"
+                )
+            
+            if params['template_weight']:
+                template_weight_path = params['template_weight'].replace('\\', '/')
+                self.matlab_engine._engine.eval(
+                    f"matlabbatch{{1}}.spm.tools.oldnorm.est.eoptions.weight = {{'{template_weight_path},1'}};"
+                )
+            
+            # Run estimation
+            self.matlab_engine._engine.eval("spm_jobman('run', matlabbatch);", nargout=0)
+            
+            # Clear batch and setup write operation
             self.matlab_engine._engine.eval("""
-                matlabbatch{1}.spm.spatial.normalise.estwrite = struct;
-                matlabbatch{1}.spm.spatial.normalise.estwrite.subj.vol = {''};
-                matlabbatch{1}.spm.spatial.normalise.estwrite.subj.resample = {''};
-                matlabbatch{1}.spm.spatial.normalise.estwrite.eoptions.template = {fullfile(spm('Dir'),'toolbox','OldNorm','T1.nii')};
-                matlabbatch{1}.spm.spatial.normalise.estwrite.eoptions.weight = '';
-                matlabbatch{1}.spm.spatial.normalise.estwrite.eoptions.smosrc = 8;
-                matlabbatch{1}.spm.spatial.normalise.estwrite.eoptions.smoref = 0;
-                matlabbatch{1}.spm.spatial.normalise.estwrite.eoptions.regtype = 'mni';
-                matlabbatch{1}.spm.spatial.normalise.estwrite.eoptions.cutoff = 25;
-                matlabbatch{1}.spm.spatial.normalise.estwrite.eoptions.nits = 16;
-                matlabbatch{1}.spm.spatial.normalise.estwrite.eoptions.reg = 1;
-                matlabbatch{1}.spm.spatial.normalise.estwrite.roptions.preserve = 0;
-                matlabbatch{1}.spm.spatial.normalise.estwrite.roptions.bb = [-78 -112 -70; 78 76 85];
-                matlabbatch{1}.spm.spatial.normalise.estwrite.roptions.vox = [2 2 2];
-                matlabbatch{1}.spm.spatial.normalise.estwrite.roptions.interp = 1;
-                matlabbatch{1}.spm.spatial.normalise.estwrite.roptions.wrap = [0 0 0];
-                matlabbatch{1}.spm.spatial.normalise.estwrite.roptions.prefix = 'w';
+            clear matlabbatch;
+            matlabbatch = {};
+            matlabbatch{1}.spm.tools.oldnorm.write = struct;
             """, nargout=0)
             
-            # Create windows in container and launch batch editor
-            self.matlab_engine._engine.eval("""
-                fg = spm_figure('Create', 'Graphics');
-                set(fg, 'MenuBar', 'none', 'Toolbar', 'none', 'Resize', 'off');
-                spm_jobman('interactive', matlabbatch);
+            # Setup write parameters - handle path conversion first
+            images_to_write = [source_path] + (params['other_images'] if params['other_images'] else [])
+            fixed_paths = []
+            for img in images_to_write:
+                if img:  # Skip empty paths
+                    img_fixed = img.replace('\\', '/')
+                    fixed_paths.append(f"'{img_fixed},1'")
+            images_list = ",".join(fixed_paths)
+            
+            self.matlab_engine._engine.eval(f"""
+            matlabbatch{{1}}.spm.tools.oldnorm.write.subj.matname = {{'{source_path}_sn.mat'}};
+            matlabbatch{{1}}.spm.tools.oldnorm.write.subj.resample = {{{images_list}}};
+            matlabbatch{{1}}.spm.tools.oldnorm.write.roptions.preserve = {params['preserve']};
+            matlabbatch{{1}}.spm.tools.oldnorm.write.roptions.bb = [-78 -112 -70; 78 76 85];
+            matlabbatch{{1}}.spm.tools.oldnorm.write.roptions.vox = [{params['voxel_size']} {params['voxel_size']} {params['voxel_size']}];
+            matlabbatch{{1}}.spm.tools.oldnorm.write.roptions.interp = {params['interpolation']};
+            matlabbatch{{1}}.spm.tools.oldnorm.write.roptions.wrap = [{' '.join(str(int(x)) for x in params['wrap'])}];
+            matlabbatch{{1}}.spm.tools.oldnorm.write.roptions.prefix = '{params['prefix']}';
             """, nargout=0)
+            
+            # Run write operation
+            self.matlab_engine._engine.eval("spm_jobman('run', matlabbatch);", nargout=0)
             
             msg, val = steps['complete']
             self.progress_manager.update_progress(msg, val)
-            self.progress_manager.complete_operation("SPM Normalisation window opened", True)
+            self.progress_manager.complete_operation("Normalization completed successfully", True)
             
         except Exception as e:
-            self.progress_manager.complete_operation(f"Failed to open SPM Normalisation: {str(e)}", False)
-            self.log_widget.append_log(f"Error launching SPM Normalisation: {str(e)}", "ERROR")
-            QMessageBox.critical(self, "Error", f"Failed to open SPM Normalisation: {str(e)}")
+            self.progress_manager.complete_operation(f"Normalization failed: {str(e)}", False)
+            self.log_widget.append_log(f"Error during normalization: {str(e)}", "ERROR")
+            QMessageBox.critical(self, "Error", f"Normalization failed: {str(e)}")
 
     @pyqtSlot()
     def set_origin(self):
@@ -882,7 +915,43 @@ class MainWindow(QMainWindow):
         self.show()
 
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    main_window = MainWindow()
-    main_window.show()
-    sys.exit(app.exec_())
+    import sys
+    import signal
+    import socket
+    import time
+    
+    def run_app():
+        """Run the application with proper initialization"""
+        app = QApplication.instance()
+        if app is None:
+            app = QApplication(sys.argv)
+        
+        # Set application properties
+        app.setOrganizationName("MISPM")
+        app.setApplicationName("SPM PyQt Interface")
+        
+        main_window = MainWindow()
+        main_window.show()
+        
+        return app.exec_()
+    
+    # Enable Ctrl+C handling
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
+    
+    try:
+        # Small delay to allow debugger to connect
+        time.sleep(0.1)
+        
+        # Try running the app
+        exit_code = run_app()
+        sys.exit(exit_code)
+        
+    except socket.error:
+        # Socket errors are expected when debugging is not available
+        print("Notice: Running without debugger")
+        exit_code = run_app()
+        sys.exit(exit_code)
+        
+    except Exception as e:
+        print(f"Fatal error during startup: {e}", file=sys.stderr)
+        sys.exit(1)

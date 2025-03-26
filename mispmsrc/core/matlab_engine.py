@@ -281,91 +281,99 @@ class MatlabEngine(QObject):
             self.operation_completed.emit("Coregistration failed", False)
             return False
 
+    def _validate_spm_paths(self, source_path, template_path=None):
+        """Validate paths for SPM operations"""
+        if not os.path.exists(source_path):
+            raise ValueError(f"Source image not found: {source_path}")
+        if template_path and not os.path.exists(template_path):
+            if not template_path.startswith(self._spm_path):
+                raise ValueError(f"Template image not found: {template_path}")
+
     def normalize_image(self, source_image, template_image=None, method="standard"):
-        """
-        Normalize image to a template using spm_normalise
-        
-        Args:
-            source_image: Path to the source image file to be normalized
-            template_image: Path to the template image file (default: SPM standard template)
-            method: Normalization method (standard, template, individual)
-        
-        Returns:
-            bool: True if successful, False otherwise
-        """
+        """Execute normalization with enhanced error handling"""
         self.logger.info(f"Normalizing image: {source_image} using method: {method}")
         self.operation_progress.emit("Starting normalization...", 0)
         
         try:
-            # If template is not specified and using a template method, use SPM's standard template
-            if template_image is None:
-                template_image = os.path.join(self._spm_path, 'tpm', 'TPM.nii')
+            # Validate paths
+            self._validate_spm_paths(source_image, template_image)
+            
+            # Initialize SPM defaults and clear batch
+            self._engine.eval("clear matlabbatch;", nargout=0)
+            self._engine.eval("spm('defaults','pet');", nargout=0)
+            self._engine.eval("spm_jobman('initcfg');", nargout=0)
+            
+            # Use default template if none specified
+            if not template_image:
+                template_image = os.path.join(self._spm_path, 'canonical', 'T1.nii')
                 self.logger.info(f"Using default template: {template_image}")
+                
+            # Fix paths for MATLAB
+            source_path = source_image.replace('\\', '/').replace('//', '/')
+            template_path = template_image.replace('\\', '/').replace('//', '/')
             
-            # Setup job structure for normalization
-            self._engine.eval("matlabbatch = {};", nargout=0)
+            # Set up the normalization batch structure step by step
+            self._engine.eval("""
+            matlabbatch = {};
+            matlabbatch{1}.spm.tools.oldnorm.est = struct;
+            matlabbatch{1}.spm.tools.oldnorm.est.subj.source = {''};
+            matlabbatch{1}.spm.tools.oldnorm.est.eoptions = struct;
+            """, nargout=0)
             
-            if method == "individual":
-                # For individual method, use the template image as the reference
-                self._engine.eval("matlabbatch{1}.spm.tools.oldnorm.estwrite = struct;", nargout=0)
-                self._engine.eval(f"matlabbatch{{1}}.spm.tools.oldnorm.estwrite.subj.source = {{'{source_image}'}};", nargout=0)
-                self._engine.eval(f"matlabbatch{{1}}.spm.tools.oldnorm.estwrite.subj.wtsrc = '';", nargout=0)
-                self._engine.eval(f"matlabbatch{{1}}.spm.tools.oldnorm.estwrite.subj.resample = {{'{source_image}'}};", nargout=0)
-                self._engine.eval(f"matlabbatch{{1}}.spm.tools.oldnorm.estwrite.eoptions.template = {{'{template_image}'}};", nargout=0)
-                self._engine.eval("matlabbatch{1}.spm.tools.oldnorm.estwrite.eoptions.weight = '';", nargout=0)
-                self._engine.eval("matlabbatch{1}.spm.tools.oldnorm.estwrite.eoptions.smosrc = 8;", nargout=0)
-                self._engine.eval("matlabbatch{1}.spm.tools.oldnorm.estwrite.eoptions.smoref = 0;", nargout=0)
-                self._engine.eval("matlabbatch{1}.spm.tools.oldnorm.estwrite.eoptions.regtype = 'subj';", nargout=0)
-                self._engine.eval("matlabbatch{1}.spm.tools.oldnorm.estwrite.eoptions.cutoff = 25;", nargout=0)
-                self._engine.eval("matlabbatch{1}.spm.tools.oldnorm.estwrite.eoptions.nits = 16;", nargout=0)
-                self._engine.eval("matlabbatch{1}.spm.tools.oldnorm.estwrite.eoptions.reg = 1;", nargout=0)
-            elif method == "template":
-                # For template method, use the selected template
-                self._engine.eval("matlabbatch{1}.spm.tools.oldnorm.estwrite = struct;", nargout=0)
-                self._engine.eval(f"matlabbatch{{1}}.spm.tools.oldnorm.estwrite.subj.source = {{'{source_image}'}};", nargout=0)
-                self._engine.eval(f"matlabbatch{{1}}.spm.tools.oldnorm.estwrite.subj.wtsrc = '';", nargout=0)
-                self._engine.eval(f"matlabbatch{{1}}.spm.tools.oldnorm.estwrite.subj.resample = {{'{source_image}'}};", nargout=0)
-                self._engine.eval(f"matlabbatch{{1}}.spm.tools.oldnorm.estwrite.eoptions.template = {{'{template_image}'}};", nargout=0)
-                self._engine.eval("matlabbatch{1}.spm.tools.oldnorm.estwrite.eoptions.weight = '';", nargout=0)
-                self._engine.eval("matlabbatch{1}.spm.tools.oldnorm.estwrite.eoptions.smosrc = 8;", nargout=0)
-                self._engine.eval("matlabbatch{1}.spm.tools.oldnorm.estwrite.eoptions.smoref = 0;", nargout=0)
-                self._engine.eval("matlabbatch{1}.spm.tools.oldnorm.estwrite.eoptions.regtype = 'mni';", nargout=0)
-                self._engine.eval("matlabbatch{1}.spm.tools.oldnorm.estwrite.eoptions.cutoff = 25;", nargout=0)
-                self._engine.eval("matlabbatch{1}.spm.tools.oldnorm.estwrite.eoptions.nits = 16;", nargout=0)
-                self._engine.eval("matlabbatch{1}.spm.tools.oldnorm.estwrite.eoptions.reg = 1;", nargout=0)
-            else:
-                # Standard method
-                self._engine.eval("matlabbatch{1}.spm.tools.oldnorm.estwrite = struct;", nargout=0)
-                self._engine.eval(f"matlabbatch{{1}}.spm.tools.oldnorm.estwrite.subj.source = {{'{source_image}'}};", nargout=0)
-                self._engine.eval(f"matlabbatch{{1}}.spm.tools.oldnorm.estwrite.subj.wtsrc = '';", nargout=0)
-                self._engine.eval(f"matlabbatch{{1}}.spm.tools.oldnorm.estwrite.subj.resample = {{'{source_image}'}};", nargout=0)
-                self._engine.eval(f"matlabbatch{{1}}.spm.tools.oldnorm.estwrite.eoptions.template = {{'{template_image}'}};", nargout=0)
-                self._engine.eval("matlabbatch{1}.spm.tools.oldnorm.estwrite.eoptions.weight = '';", nargout=0)
-                self._engine.eval("matlabbatch{1}.spm.tools.oldnorm.estwrite.eoptions.smosrc = 8;", nargout=0)
-                self._engine.eval("matlabbatch{1}.spm.tools.oldnorm.estwrite.eoptions.smoref = 0;", nargout=0)
-                self._engine.eval("matlabbatch{1}.spm.tools.oldnorm.estwrite.eoptions.regtype = 'mni';", nargout=0)
-                self._engine.eval("matlabbatch{1}.spm.tools.oldnorm.estwrite.eoptions.cutoff = 25;", nargout=0)
-                self._engine.eval("matlabbatch{1}.spm.tools.oldnorm.estwrite.eoptions.nits = 16;", nargout=0)
-                self._engine.eval("matlabbatch{1}.spm.tools.oldnorm.estwrite.eoptions.reg = 1;", nargout=0)
+            # Set source and template
+            self._engine.eval(f"""
+            matlabbatch{{1}}.spm.tools.oldnorm.est.subj.source = {{'{source_path},1'}};
+            matlabbatch{{1}}.spm.tools.oldnorm.est.eoptions.template = {{'{template_path},1'}};
+            """, nargout=0)
             
-            # Set write options - same for all methods
-            self._engine.eval("matlabbatch{1}.spm.tools.oldnorm.estwrite.roptions.preserve = 0;", nargout=0)
-            self._engine.eval("matlabbatch{1}.spm.tools.oldnorm.estwrite.roptions.bb = [-78 -112 -70; 78 76 85];", nargout=0)
-            self._engine.eval("matlabbatch{1}.spm.tools.oldnorm.estwrite.roptions.vox = [2 2 2];", nargout=0)
-            self._engine.eval("matlabbatch{1}.spm.tools.oldnorm.estwrite.roptions.interp = 1;", nargout=0)
-            self._engine.eval("matlabbatch{1}.spm.tools.oldnorm.estwrite.roptions.wrap = [0 0 0];", nargout=0)
-            self._engine.eval("matlabbatch{1}.spm.tools.oldnorm.estwrite.roptions.prefix = 'w';", nargout=0)
+            # Set estimation parameters
+            self._engine.eval("""
+            matlabbatch{1}.spm.tools.oldnorm.est.eoptions.weight = '';
+            matlabbatch{1}.spm.tools.oldnorm.est.eoptions.smosrc = 8;
+            matlabbatch{1}.spm.tools.oldnorm.est.eoptions.smoref = 0;
+            matlabbatch{1}.spm.tools.oldnorm.est.eoptions.regtype = 'mni';
+            matlabbatch{1}.spm.tools.oldnorm.est.eoptions.cutoff = 25;
+            matlabbatch{1}.spm.tools.oldnorm.est.eoptions.nits = 16;
+            matlabbatch{1}.spm.tools.oldnorm.est.eoptions.reg = 1;
+            """, nargout=0)
             
-            self.operation_progress.emit("Executing normalization...", 30)
+            # Run estimation
+            self.operation_progress.emit("Estimating normalization parameters...", 30)
+            try:
+                self._engine.eval("spm_jobman('run', matlabbatch);", nargout=0)
+            except Exception as e:
+                raise RuntimeError(f"Normalization estimation failed: {str(e)}")
             
-            # Run normalization
-            self._engine.eval("spm_jobman('run', matlabbatch);", nargout=0)
+            # Set up the write batch
+            self._engine.eval("""
+            clear matlabbatch;
+            matlabbatch = {};
+            matlabbatch{1}.spm.tools.oldnorm.write = struct;
+            """, nargout=0)
+            
+            # Configure write options
+            self._engine.eval(f"""
+            matlabbatch{{1}}.spm.tools.oldnorm.write.subj.matname = {{'{source_path}_sn.mat'}};
+            matlabbatch{{1}}.spm.tools.oldnorm.write.subj.resample = {{'{source_path},1'}};
+            matlabbatch{{1}}.spm.tools.oldnorm.write.roptions.preserve = 0;
+            matlabbatch{{1}}.spm.tools.oldnorm.write.roptions.bb = [-78 -112 -70; 78 76 85];
+            matlabbatch{{1}}.spm.tools.oldnorm.write.roptions.vox = [2 2 2];
+            matlabbatch{{1}}.spm.tools.oldnorm.write.roptions.interp = 1;
+            matlabbatch{{1}}.spm.tools.oldnorm.write.roptions.wrap = [0 0 0];
+            matlabbatch{{1}}.spm.tools.oldnorm.write.roptions.prefix = 'w';
+            """, nargout=0)
+            
+            # Run write operation
+            self.operation_progress.emit("Writing normalized image...", 70)
+            try:
+                self._engine.eval("spm_jobman('run', matlabbatch);", nargout=0)
+            except Exception as e:
+                raise RuntimeError(f"Failed to write normalized image: {str(e)}")
             
             self.operation_progress.emit("Normalization completed", 100)
             self.operation_completed.emit("Normalization completed successfully", True)
-            
             return True
-            
+                
         except Exception as e:
             error_msg = f"Error in normalization: {str(e)}"
             self.logger.error(error_msg)
