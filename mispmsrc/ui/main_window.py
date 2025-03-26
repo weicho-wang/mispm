@@ -80,19 +80,19 @@ class MainWindow(QMainWindow):
         """Set up the UI components"""
         # Set window properties
         self.setWindowTitle("SPM PyQt Interface")
-        self.setMinimumSize(1200, 700)  # 增加窗口宽度以容纳右侧面板
+        self.setMinimumSize(800, 700)  # 减小窗口宽度，因为移除了右侧面板
         
-        # Create central widget with horizontal layout
+        # Create central widget with vertical layout (改为垂直布局)
         central_widget = QWidget()
-        main_layout = QHBoxLayout(central_widget)  # 改为水平布局
+        main_layout = QVBoxLayout(central_widget)  # 改为垂直布局
         main_layout.setSpacing(5)
         main_layout.setContentsMargins(5, 5, 5, 5)
         
-        # Left panel for controls
-        left_panel = QWidget()
-        left_layout = QVBoxLayout(left_panel)
-        left_layout.setSpacing(5)
-        left_layout.setContentsMargins(2, 2, 2, 2)
+        # Left panel (删除"left"，因为现在是唯一的面板)
+        control_panel = QWidget()
+        control_layout = QVBoxLayout(control_panel)
+        control_layout.setSpacing(5)
+        control_layout.setContentsMargins(2, 2, 2, 2)
         
         # Group box for MATLAB engine
         engine_group = QGroupBox("MATLAB Engine")
@@ -113,7 +113,7 @@ class MainWindow(QMainWindow):
         engine_layout.addWidget(self.start_engine_btn, 0, Qt.AlignLeft)  # 左对齐
         engine_layout.addWidget(self.stop_engine_btn, 0, Qt.AlignLeft)
         engine_group.setLayout(engine_layout)
-        left_layout.addWidget(engine_group)
+        control_layout.addWidget(engine_group)
         
         # Group box for DICOM conversion
         dicom_group = QGroupBox("DICOM/NIFTI Import")
@@ -122,7 +122,7 @@ class MainWindow(QMainWindow):
         self.import_dicom_btn.setFixedHeight(32)
         dicom_layout.addWidget(self.import_dicom_btn)
         dicom_group.setLayout(dicom_layout)
-        left_layout.addWidget(dicom_group)
+        control_layout.addWidget(dicom_group)
         
         # Group box for image manipulation
         self.image_group = QGroupBox("Image Processing")
@@ -154,12 +154,12 @@ class MainWindow(QMainWindow):
         image_layout.addWidget(self.check_reg_btn)
         
         self.image_group.setLayout(image_layout)
-        left_layout.addWidget(self.image_group)
+        control_layout.addWidget(self.image_group)
         
         # Add run script button
         self.run_script_btn = QPushButton("Run MATLAB Script")
         self.run_script_btn.setFixedHeight(32)
-        left_layout.addWidget(self.run_script_btn)
+        control_layout.addWidget(self.run_script_btn)
         
         # Add log viewer
         log_group = QGroupBox("Log")
@@ -167,31 +167,10 @@ class MainWindow(QMainWindow):
         self.log_widget = LogWidget()
         log_layout.addWidget(self.log_widget)
         log_group.setLayout(log_layout)
-        left_layout.addWidget(log_group)
+        control_layout.addWidget(log_group)
         
-        # Add left panel to main layout
-        main_layout.addWidget(left_panel)
-        
-        # Right panel for SPM windows
-        right_panel = QWidget()
-        right_layout = QVBoxLayout(right_panel)
-        right_layout.setSpacing(0)
-        right_layout.setContentsMargins(0, 0, 0, 0)
-        
-        # Add title label
-        right_title = QLabel("SPM Batch Editor")
-        right_title.setAlignment(Qt.AlignCenter)
-        right_title.setStyleSheet("font-weight: bold; padding: 5px;")
-        right_layout.addWidget(right_title)
-        
-        # Add container widget for SPM windows
-        self.spm_container = QWidget()
-        self.spm_container.setStyleSheet("background-color: white;")
-        self.spm_container.setMinimumWidth(400)
-        right_layout.addWidget(self.image_view)  # Replace the spm_container with ImageView in right_layout
-        
-        # Add right panel to main layout
-        main_layout.addWidget(right_panel)
+        # Add control panel to main layout
+        main_layout.addWidget(control_panel)
         
         # Set central widget
         self.setCentralWidget(central_widget)
@@ -264,7 +243,7 @@ class MainWindow(QMainWindow):
         image_layout.addLayout(other_btns_layout)
         
         # Run MATLAB Script按钮布局修改
-        left_layout.addWidget(self.run_script_btn, 0, Qt.AlignLeft)
+        control_layout.addWidget(self.run_script_btn, 0, Qt.AlignLeft)
     
     def connect_signals(self):
         """Connect UI signals to slots"""

@@ -4,6 +4,7 @@ from PyQt5.QtWidgets import (
     QDoubleSpinBox, QCheckBox, QGridLayout, QMessageBox
 )
 from PyQt5.QtCore import Qt, pyqtSignal
+from .bounding_box_dialog import BoundingBoxDialog  # 添加到文件顶部的导入部分
 
 class NormalizeDialog(QDialog):
     """标准化操作对话框，替代SPM batch editor功能"""
@@ -127,9 +128,20 @@ class NormalizeDialog(QDialog):
         write_layout.addWidget(self.preserve, 0, 1)
         
         # Bounding box
+        bb_layout = QHBoxLayout()
         self.bb_custom = QCheckBox("Custom Bounding Box")
+        self.bb_btn = QPushButton("Edit Box")
+        self.bb_btn.setEnabled(False)
+        self.bb_btn.clicked.connect(self._edit_bounding_box)
+        self.bb_custom.toggled.connect(self.bb_btn.setEnabled)
+        bb_layout.addWidget(self.bb_custom)
+        bb_layout.addWidget(self.bb_btn)
+        bb_layout.addStretch()
         write_layout.addWidget(QLabel("Bounding Box:"), 1, 0)
-        write_layout.addWidget(self.bb_custom, 1, 1)
+        write_layout.addLayout(bb_layout, 1, 1)
+        
+        # 存储当前边界框值
+        self.current_bb = [-78, -112, -70, 78, 76, 85]
         
         # Voxel sizes
         self.voxel_size = QDoubleSpinBox()
@@ -201,6 +213,12 @@ class NormalizeDialog(QDialog):
             if filename:
                 line_edit.setText(filename)
     
+    def _edit_bounding_box(self):
+        """打开边界框编辑对话框"""
+        dialog = BoundingBoxDialog(self, self.current_bb)
+        if dialog.exec_():
+            self.current_bb = dialog.get_bounding_box()
+    
     def _run_normalization(self):
         """Execute normalization with parameter validation"""
         source_image = self.source_edit.text()
@@ -222,6 +240,7 @@ class NormalizeDialog(QDialog):
             'nonlinear_iterations': max(1, self.iterations.value()),
             'nonlinear_regularization': max(0, self.nonlinear_reg.value()),
             'preserve': self.preserve.currentIndex(),
+            'bounding_box': self.current_bb if self.bb_custom.isChecked() else [-78, -112, -70, 78, 76, 85],
             'voxel_size': max(0.1, self.voxel_size.value()),
             'interpolation': self.interpolation.currentIndex(),
             'wrap': [self.wrap_x.isChecked(), self.wrap_y.isChecked(), self.wrap_z.isChecked()],
