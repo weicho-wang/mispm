@@ -7,9 +7,9 @@ from PyQt5.QtCore import Qt, pyqtSignal
 from .bounding_box_dialog import BoundingBoxDialog  # 添加到文件顶部的导入部分
 
 class NormalizeDialog(QDialog):
-    """标准化操作对话框，替代SPM batch editor功能"""
+    """标准化操作对话框"""
     
-    normalize_started = pyqtSignal(dict)  # 发送标准化参数的信号
+    normalise_started = pyqtSignal(dict)  # 修正拼写，与 main_window.py 保持一致
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -230,23 +230,22 @@ class NormalizeDialog(QDialog):
         params = {
             'source_image': source_image,
             'template': self.template_edit.text() or None,
-            'source_weight': self.weight_edit.text() or None,
-            'other_images': [img.strip() for img in self.images_edit.text().split(';') if img.strip()],
+            'weight': self.weight_edit.text() or None,
             'template_weight': self.template_weight_edit.text() or None,
-            'source_smoothing': max(0, self.source_smooth.value()),
-            'template_smoothing': max(0, self.template_smooth.value()),
-            'affine_regularization': self.affine_reg.currentText().lower().replace(' ', '_'),
-            'nonlinear_cutoff': max(0, self.cutoff.value()),
-            'nonlinear_iterations': max(1, self.iterations.value()),
-            'nonlinear_regularization': max(0, self.nonlinear_reg.value()),
+            'source_smoothing': self.source_smooth.value(),
+            'template_smoothing': self.template_smooth.value(),
+            'affine_reg': self.affine_reg.currentText().lower().replace(' ', '_'),
+            'nonlinear_cutoff': self.cutoff.value(),
+            'nonlinear_iterations': self.iterations.value(),
+            'nonlinear_reg': self.nonlinear_reg.value(),
             'preserve': self.preserve.currentIndex(),
-            'bounding_box': self.current_bb if self.bb_custom.isChecked() else [-78, -112, -70, 78, 76, 85],
-            'voxel_size': max(0.1, self.voxel_size.value()),
+            'bounding_box': self.current_bb if self.bb_custom.isChecked() else None,
+            'voxel_size': self.voxel_size.value(),
             'interpolation': self.interpolation.currentIndex(),
             'wrap': [self.wrap_x.isChecked(), self.wrap_y.isChecked(), self.wrap_z.isChecked()],
             'prefix': self.prefix_edit.text() or 'w'
         }
         
         # Emit signal and close dialog
-        self.normalize_started.emit(params)
+        self.normalise_started.emit(params)
         self.accept()

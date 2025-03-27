@@ -16,16 +16,14 @@ from PyQt5.QtGui import QFont
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.append(project_root)
 
-sys.path.append(os.path.join(project_root, "core"))  # Ensure this path is correct
-
 from mispmsrc.core.matlab_engine import MatlabEngine
 from mispmsrc.utils.logger import Logger
 from mispmsrc.ui.progress_manager import ProgressManager
 from mispmsrc.ui.coreg_dialog import CoregisterDialog
 from mispmsrc.ui.normalize_dialog import NormalizeDialog
-from mispmsrc.ui.image_view import ImageView  # Add this import near other imports
-from mispmsrc.ui.cl_analysis_dialog import CLAnalysisDialog  # Changed from relative to absolute import
-from mispmsrc.CLRefactoring.PIB_SUVr_CLs_calc import PIBAnalyzer  # Changed from relative to absolute import
+from mispmsrc.ui.image_view import ImageView
+from mispmsrc.ui.cl_analysis_dialog import CLAnalysisDialog
+from mispmsrc.CLRefactoring.PIB_SUVr_CLs_calc import PIBAnalyzer
 
 class LogWidget(QTextEdit):
     """Widget to display log messages"""
@@ -85,98 +83,81 @@ class MainWindow(QMainWindow):
         """Set up the UI components"""
         # Set window properties
         self.setWindowTitle("SPM PyQt Interface")
-        self.setMinimumSize(800, 700)  # 减小窗口宽度，因为移除了右侧面板
+        self.setMinimumSize(1000, 700)
         
-        # Create central widget with vertical layout (改为垂直布局)
+        # Create central widget with horizontal split layout
         central_widget = QWidget()
-        main_layout = QVBoxLayout(central_widget)  # 改为垂直布局
+        main_layout = QHBoxLayout(central_widget)
         main_layout.setSpacing(5)
         main_layout.setContentsMargins(5, 5, 5, 5)
         
-        # Left panel (删除"left"，因为现在是唯一的面板)
-        control_panel = QWidget()
-        control_layout = QVBoxLayout(control_panel)
-        control_layout.setSpacing(5)
-        control_layout.setContentsMargins(2, 2, 2, 2)
+        # Left panel for controls
+        left_panel = QWidget()
+        left_layout = QVBoxLayout(left_panel)
+        left_layout.setSpacing(5)
+        left_layout.setContentsMargins(2, 2, 2, 2)
         
-        # Group box for MATLAB engine
+        # Engine controls group
         engine_group = QGroupBox("MATLAB Engine")
-        engine_group.setFlat(True)  # 使分组框更扁平
         engine_layout = QVBoxLayout()
-        engine_layout.setSpacing(3)  # 减小间距
-        engine_layout.setContentsMargins(5, 5, 5, 5)  # 减小边距
-        self.start_engine_btn = QPushButton("Start Engine")  # 简化按钮文字
+        self.engine_status_label = QLabel("Engine: Not running")
+        self.start_engine_btn = QPushButton("Start Engine")
         self.stop_engine_btn = QPushButton("Stop Engine")
-        self.engine_status_label = QLabel("Engine: Not running")  # 简化标签文字
-        
-        # 设置按钮属性
-        for btn in [self.start_engine_btn, self.stop_engine_btn]:
-            btn.setFixedHeight(25)  # 减小按钮高度
-            btn.setFixedWidth(120)  # 限制按钮宽度
-        
         engine_layout.addWidget(self.engine_status_label)
-        engine_layout.addWidget(self.start_engine_btn, 0, Qt.AlignLeft)  # 左对齐
-        engine_layout.addWidget(self.stop_engine_btn, 0, Qt.AlignLeft)
+        engine_layout.addWidget(self.start_engine_btn)
+        engine_layout.addWidget(self.stop_engine_btn)
         engine_group.setLayout(engine_layout)
-        control_layout.addWidget(engine_group)
+        left_layout.addWidget(engine_group)
         
-        # Group box for DICOM conversion
-        dicom_group = QGroupBox("DICOM/NIFTI Import")
+        # DICOM/NIFTI group
+        dicom_group = QGroupBox("Convert DICOM To NIFTI")
         dicom_layout = QVBoxLayout()
         self.import_dicom_btn = QPushButton("Import DICOM")
-        self.import_dicom_btn.setFixedHeight(32)
+        self.convert_nifti_btn = QPushButton("Convert To NiFTI")
         dicom_layout.addWidget(self.import_dicom_btn)
+        dicom_layout.addWidget(self.convert_nifti_btn)
         dicom_group.setLayout(dicom_layout)
-        control_layout.addWidget(dicom_group)
+        left_layout.addWidget(dicom_group)
         
-        # Group box for image manipulation
-        self.image_group = QGroupBox("Image Processing")
+        # Image processing group
+        image_group = QGroupBox("Image Processing")
         image_layout = QVBoxLayout()
-        
-        # Load NIFTI button
+
+        # 创建所有按钮
         self.load_nifti_btn = QPushButton("Load NIFTI")
-        self.load_nifti_btn.setFixedHeight(32)
-        image_layout.addWidget(self.load_nifti_btn)
-        
-        # Coregistration section - 移除下拉菜单，简化布局
         self.coregister_btn = QPushButton("Coregistration")
-        self.coregister_btn.setFixedHeight(25)
-        self.coregister_btn.setFixedWidth(120)
-        image_layout.addWidget(self.coregister_btn, 0, Qt.AlignLeft)
-        
-        # Normalisation section - 移除下拉菜单，简化布局
         self.normalise_btn = QPushButton("Normalise")
-        self.normalise_btn.setFixedHeight(25)
-        self.normalise_btn.setFixedWidth(120)
-        image_layout.addWidget(self.normalise_btn, 0, Qt.AlignLeft)
-        
-        # Other buttons
         self.set_origin_btn = QPushButton("Set Origin")
         self.check_reg_btn = QPushButton("Check Registration")
-        self.set_origin_btn.setFixedHeight(32)
-        self.check_reg_btn.setFixedHeight(32)
-        image_layout.addWidget(self.set_origin_btn)
-        image_layout.addWidget(self.check_reg_btn)
+        self.run_script_btn = QPushButton("LC Analysis")  # LC Analysis 按钮
         
-        self.image_group.setLayout(image_layout)
-        control_layout.addWidget(self.image_group)
+        # 添加按钮到布局，让它们左对齐
+        for btn in [self.load_nifti_btn, self.coregister_btn, self.normalise_btn, 
+                   self.set_origin_btn, self.check_reg_btn, self.run_script_btn]:
+            btn_layout = QHBoxLayout()
+            btn_layout.addWidget(btn)
+            btn_layout.addStretch()
+            image_layout.addLayout(btn_layout)
         
-        # Add run script button
-        # self.run_script_btn = QPushButton("Run MATLAB Script")
-        self.run_script_btn = QPushButton("LC Analysis")
-        self.run_script_btn.setFixedHeight(32)
-        control_layout.addWidget(self.run_script_btn)
+        image_group.setLayout(image_layout)
+        left_layout.addWidget(image_group)
         
-        # Add log viewer
+        # Add stretch to push everything up
+        left_layout.addStretch()
+        
+        # Right panel for log
+        right_panel = QWidget()
+        right_layout = QVBoxLayout(right_panel)
         log_group = QGroupBox("Log")
         log_layout = QVBoxLayout()
         self.log_widget = LogWidget()
         log_layout.addWidget(self.log_widget)
         log_group.setLayout(log_layout)
-        control_layout.addWidget(log_group)
+        right_layout.addWidget(log_group)
         
-        # Add control panel to main layout
-        main_layout.addWidget(control_panel)
+        # Add panels to main layout with equal width
+        main_layout.addWidget(left_panel, 1)  # stretch factor 1
+        main_layout.addWidget(right_panel, 1)  # stretch factor 1
         
         # Set central widget
         self.setCentralWidget(central_widget)
@@ -210,7 +191,8 @@ class MainWindow(QMainWindow):
             self.normalise_btn,
             self.set_origin_btn,
             self.check_reg_btn,
-            self.run_script_btn
+            self.run_script_btn,
+            self.convert_nifti_btn  # 新增按钮
         ]
         
         # 统一设置所有按钮的样式
@@ -249,7 +231,7 @@ class MainWindow(QMainWindow):
         image_layout.addLayout(other_btns_layout)
         
         # LC Analysis Script按钮布局修改
-        control_layout.addWidget(self.run_script_btn, 0, Qt.AlignLeft)
+        left_layout.addWidget(self.run_script_btn, 0, Qt.AlignLeft)
     
     def connect_signals(self):
         """Connect UI signals to slots"""
@@ -271,6 +253,7 @@ class MainWindow(QMainWindow):
         self.set_origin_btn.clicked.connect(self.set_origin)
         self.check_reg_btn.clicked.connect(self.check_registration)
         self.run_script_btn.clicked.connect(self.run_matlab_script)
+        self.convert_nifti_btn.clicked.connect(self.convert_to_nifti)  # 新增信号连接
     
     def update_button_states(self, engine_running):
         """
@@ -289,6 +272,7 @@ class MainWindow(QMainWindow):
         self.normalise_btn.setEnabled(engine_running)
         self.set_origin_btn.setEnabled(engine_running)
         self.check_reg_btn.setEnabled(engine_running)
+        self.convert_nifti_btn.setEnabled(engine_running)  # 新增按钮状态控制
     
     @pyqtSlot()
     def start_matlab_engine(self):
@@ -393,570 +377,174 @@ class MainWindow(QMainWindow):
         msgBox.exec_()
         
         if msgBox.clickedButton() == QMessageBox.Cancel:
-            self.log_widget.append_log("DICOM import cancelled")
             return
-            
-        dicom_files = []
         
-        if msgBox.clickedButton() == files_btn:  # Individual files
-            # Get DICOM files from user
-            files, _ = QFileDialog.getOpenFileNames(
-                self, "Select DICOM Files", "", "DICOM Files (*.dcm *.ima);;All Files (*)"
-            )
-            
-            if not files:
-                self.log_widget.append_log("DICOM import cancelled")
-                return
-                
-            self.log_widget.append_log(f"Selected {len(files)} DICOM files")
-            dicom_files = files
-            
-            # Use the directory of the first file as default dicom_dir
-            dicom_dir = os.path.dirname(files[0])
-        else:  # Directory
-            # Get DICOM directory from user
-            dicom_dir = QFileDialog.getExistingDirectory(
-                self, "Select DICOM Directory", "", QFileDialog.ShowDirsOnly
-            )
-            
-            if not dicom_dir:
-                self.log_widget.append_log("DICOM import cancelled")
-                return
-                
-            self.log_widget.append_log(f"Selected DICOM directory: {dicom_dir}")
-            
-            # Check if directory contains DICOM files
-            try:
-                # Use MATLAB to check for DICOM files
-                result = self.matlab_engine.call_function("spm_select", 'FPList', dicom_dir, '.*\.dcm$')
-                if len(result) == 0:
-                    self.log_widget.append_log("No DICOM files found in the selected directory", "ERROR")
-                    QMessageBox.critical(self, "Error", "No DICOM files found in the selected directory.")
-                    return
-                self.log_widget.append_log(f"Found {len(result)} DICOM files in directory")
-            except Exception as e:
-                self.log_widget.append_log(f"Error checking for DICOM files: {str(e)}", "ERROR")
-                QMessageBox.critical(self, "Error", f"Error checking for DICOM files: {str(e)}")
-                return
-        
-        # Get output directory from user
-        output_dir = QFileDialog.getExistingDirectory(
-            self, "Select Output Directory", dicom_dir, QFileDialog.ShowDirsOnly
-        )
-        
-        if not output_dir:
-            # Use DICOM directory if no output directory is selected
-            output_dir = dicom_dir
-            self.log_widget.append_log(f"Using DICOM directory as output: {output_dir}")
-        else:
-            self.log_widget.append_log(f"Selected output directory: {output_dir}")
-        
-        # Convert DICOM to NIFTI
-        try:
-            if msgBox.clickedButton() == files_btn:  # Individual files
-                nii_files = self.matlab_engine.convert_dicom_files_to_nifti(dicom_files, output_dir)
-            else:  # Directory
-                nii_files = self.matlab_engine.convert_dicom_to_nifti(dicom_dir, output_dir)
-            
-            if nii_files:
-                self.log_widget.append_log(f"Converted {len(nii_files)} DICOM files to NIFTI", "SUCCESS")
-                
-                # Ask user if they want to load the first NIFTI file
-                if QMessageBox.question(
-                    self,
-                    "Load NIFTI",
-                    "Do you want to load the first NIFTI file?",
-                    QMessageBox.Yes | QMessageBox.No
-                ) == QMessageBox.Yes:
-                    self.image_view.display_image(nii_files[0])
-            else:
-                self.log_widget.append_log("No NIFTI files were created", "WARNING")
-                
-        except Exception as e:
-            self.log_widget.append_log(f"Error converting DICOM to NIFTI: {str(e)}", "ERROR")
-            QMessageBox.critical(self, "Error", f"Failed to convert DICOM to NIFTI: {str(e)}")
+        if msgBox.clickedButton() == folder_btn:
+            # Select directory
+            directory = QFileDialog.getExistingDirectory(self, "Select DICOM Directory")
+            if directory:
+                self.log_widget.append_log(f"Selected DICOM directory: {directory}")
+                self.matlab_engine.import_dicom(directory)
+        elif msgBox.clickedButton() == files_btn:
+            # Select files
+            files, _ = QFileDialog.getOpenFileNames(self, "Select DICOM Files", "", "DICOM Files (*.dcm)")
+            if files:
+                self.log_widget.append_log(f"Selected DICOM files: {', '.join(files)}")
+                self.matlab_engine.import_dicom(files)
     
     @pyqtSlot()
     def load_nifti(self):
-        """Load or import a NIFTI file"""
-        self.log_widget.append_log("NIFTI File Operation...")
+        """Load NIFTI file"""
+        self.log_widget.append_log("Loading NIFTI file...")
         
-        # Ask user if they want to select files or a directory
-        msgBox = QMessageBox()
-        msgBox.setWindowTitle("NIFTI Operation")
-        msgBox.setText("Would you like to select individual NIFTI files or a directory?")
-        folder_btn = msgBox.addButton("Directory", QMessageBox.ActionRole)
-        files_btn = msgBox.addButton("Files", QMessageBox.ActionRole)
-        msgBox.addButton(QMessageBox.Cancel)
-        msgBox.exec_()
-        
-        if msgBox.clickedButton() == QMessageBox.Cancel:
-            self.log_widget.append_log("NIFTI operation cancelled")
-            return
-        
-        if msgBox.clickedButton() == files_btn:  # Individual files
-            # Get NIFTI file from user
-            nifti_file, _ = QFileDialog.getOpenFileName(
-                self, "Select NIFTI File", "", "NIFTI Files (*.nii *.nii.gz *.img);;All Files (*)"
-            )
-            
-            if not nifti_file:
-                self.log_widget.append_log("NIFTI operation cancelled")
-                return
-                
-            self.log_widget.append_log(f"Selected NIFTI file: {nifti_file}")
-            
-        else:  # Directory
-            # Get NIFTI directory from user
-            nifti_dir = QFileDialog.getExistingDirectory(
-                self, "Select NIFTI Directory", "", QFileDialog.ShowDirsOnly
-            )
-            
-            if not nifti_dir:
-                self.log_widget.append_log("NIFTI operation cancelled")
-                return
-                
-            self.log_widget.append_log(f"Selected NIFTI directory: {nifti_dir}")
-            
-            # Check if directory contains NIFTI files
-            try:
-                result = self.matlab_engine.call_function("spm_select", 'FPList', nifti_dir, '.*\.nii$')
-                if len(result) == 0:
-                    self.log_widget.append_log("No NIFTI files found in the selected directory", "ERROR")
-                    QMessageBox.critical(self, "Error", "No NIFTI files found in the selected directory.")
-                    return
-                
-                self.log_widget.append_log(f"Found {len(result)} NIFTI files in directory")
-                
-                # Ask user to select one of the found NIFTI files
-                if len(result) > 1:
-                    filenames = [os.path.basename(file) for file in result]
-                    selected_file, ok = QInputDialog.getItem(
-                        self, "Select NIFTI File", 
-                        "Multiple NIFTI files found. Please select one:", 
-                        filenames, 0, False
-                    )
-                    
-                    if not ok or not selected_file:
-                        self.log_widget.append_log("NIFTI file selection cancelled")
-                        return
-                    
-                    # Find the full path of the selected file
-                    for file in result:
-                        if os.path.basename(file) == selected_file:
-                            nifti_file = file
-                            break
-                else:
-                    nifti_file = result[0]
-                
-                self.log_widget.append_log(f"Selected NIFTI file: {nifti_file}")
-                
-            except Exception as e:
-                self.log_widget.append_log(f"Error checking for NIFTI files: {str(e)}", "ERROR")
-                QMessageBox.critical(self, "Error", f"Error checking for NIFTI files: {str(e)}")
-                return
-
-        # Load the selected NIFTI file
-        try:
-            success = self.matlab_engine.display_image(nifti_file)
-            if success:
-                self.log_widget.append_log("NIFTI file loaded successfully", "SUCCESS")
-            else:
-                self.log_widget.append_log("Failed to load NIFTI file", "ERROR")
-        except Exception as e:
-            self.log_widget.append_log(f"Error loading NIFTI file: {str(e)}", "ERROR")
-            QMessageBox.critical(self, "Error", f"Failed to load NIFTI file: {str(e)}")
+        file_path, _ = QFileDialog.getOpenFileName(self, "Select NIFTI File", "", "NIFTI Files (*.nii *.nii.gz)")
+        if file_path:
+            self.log_widget.append_log(f"Selected NIFTI file: {file_path}")
+            self.matlab_engine.load_nifti(file_path)
     
     @pyqtSlot()
     def coregister_images(self):
-        """启动协配对话框"""
-        dialog = CoregisterDialog(self)
-        dialog.coregister_started.connect(self._execute_coregistration)
-        dialog.exec_()
-    
-    def _execute_coregistration(self, params):
-        """Execute coregistration operation"""
-        self.progress_manager.start_operation("Coregistration")
-        steps = self.progress_manager.get_operation_steps('coregister')
+        """Coregister images"""
+        self.log_widget.append_log("Coregistering images...")
         
+        dialog = CoregisterDialog(self)
+        dialog.coregister_started.connect(self._handle_coregistration)  # Changed
+        dialog.exec_()
+        
+    def _handle_coregistration(self, params):
+        """Handle coregistration parameters and call engine"""
         try:
-            msg, val = steps['init']
-            self.progress_manager.update_progress(msg, val)
-            
-            # Initialize SPM and clear existing jobs
-            self.matlab_engine._engine.eval("spm('defaults','pet');", nargout=0)
-            self.matlab_engine._engine.eval("spm_jobman('initcfg');", nargout=0)
-            self.matlab_engine._engine.eval("clear matlabbatch;", nargout=0)
-            
-            # Fix paths for MATLAB
-            ref_path = params['ref_image'].replace('\\', '/')
-            source_path = params['source_image'].replace('\\', '/')
-            
-            # Create job structure step by step
-            cmd = [
-                "matlabbatch{1}.spm.spatial.coreg.estwrite.ref = {'" + ref_path + ",1'};",
-                "matlabbatch{1}.spm.spatial.coreg.estwrite.source = {'" + source_path + ",1'};"
-            ]
-            
-            # Handle other images
-            if params['other_images'] and params['other_images'][0]:  # Check if list is not empty and first item is not empty
-                other_files = ["'" + f.replace('\\', '/') + ",1'" for f in params['other_images']]
-                cmd.append("matlabbatch{1}.spm.spatial.coreg.estwrite.other = {" + " ".join(other_files) + "};")
-            else:
-                cmd.append("matlabbatch{1}.spm.spatial.coreg.estwrite.other = {''};")
-            
-            # Map cost function
-            cost_function_map = {
-                'Mutual Information': 'mi',
-                'Normalised Mutual Information': 'nmi',
-                'Entropy Correlation Coefficient': 'ecc',
-                'Normalised Cross Correlation': 'ncc'
-            }
-            cost_fun = cost_function_map.get(params['cost_function'], 'nmi')
-            
-            # Add estimation options
-            est_cmd = [
-                "matlabbatch{1}.spm.spatial.coreg.estwrite.eoptions.cost_fun = '" + cost_fun + "';",
-                "matlabbatch{1}.spm.spatial.coreg.estwrite.eoptions.sep = [" + str(params['separation']) + "];",
-                "matlabbatch{1}.spm.spatial.coreg.estwrite.eoptions.tol = [0.02 0.02 0.02 0.001 0.001 0.001 0.01 0.01 0.01 0.001 0.001 0.001];",
-                "matlabbatch{1}.spm.spatial.coreg.estwrite.eoptions.fwhm = [" + str(params['fwhm']) + " " + str(params['fwhm']) + "];"
-            ]
-            cmd.extend(est_cmd)
-            
-            # Add reslice options
-            wraps = " ".join(str(int(x)) for x in params['wrap'])
-            reslice_cmd = [
-                "matlabbatch{1}.spm.spatial.coreg.estwrite.roptions.interp = " + str(params['interpolation']) + ";",
-                "matlabbatch{1}.spm.spatial.coreg.estwrite.roptions.wrap = [" + wraps + "];",
-                "matlabbatch{1}.spm.spatial.coreg.estwrite.roptions.mask = " + str(int(params['mask'])) + ";",
-                "matlabbatch{1}.spm.spatial.coreg.estwrite.roptions.prefix = '" + params['prefix'] + "';"
-            ]
-            cmd.extend(reslice_cmd)
-            
-            # Execute all commands
-            for c in cmd:
-                self.matlab_engine._engine.eval(c, nargout=0)
-                
-            # Run coregistration
-            self.matlab_engine._engine.eval("spm_jobman('run',matlabbatch);", nargout=0)
-            
-            # Get the output file path
-            source_dir = os.path.dirname(params['source_image'])
-            source_name = os.path.basename(params['source_image'])
-            resliced_file = os.path.join(source_dir, params['prefix'] + source_name)
-            
-            # Display results
-            self.matlab_engine._engine.eval("spm_figure('GetWin','Graphics');", nargout=0)
-            self.matlab_engine._engine.eval("spm_figure('Clear','Graphics');", nargout=0)
-            display_cmd = "spm_check_registration('" + ref_path + "','" + resliced_file.replace('\\', '/') + "');"
-            self.matlab_engine._engine.eval(display_cmd, nargout=0)
-            
-            msg, val = steps['complete']
-            self.progress_manager.update_progress(msg, val)
-            self.progress_manager.complete_operation("Coregistration completed successfully", True)
-            
+            self.matlab_engine.coregister_images(
+                params['ref_image'],
+                params['source_image'],
+                params.get('cost_function', 'nmi')
+            )
         except Exception as e:
-            self.progress_manager.complete_operation(f"Coregistration failed: {str(e)}", False)
-            self.log_widget.append_log(f"Error during coregistration: {str(e)}", "ERROR")
-            QMessageBox.critical(self, "Error", f"Coregistration failed: {str(e)}")
+            self.log_widget.append_log(f"Coregistration error: {str(e)}", "ERROR")
 
     @pyqtSlot()
     def normalise_image(self):
-        """启动标准化对话框"""
-        dialog = NormalizeDialog(self)
-        dialog.normalize_started.connect(self._execute_normalization)
-        dialog.exec_()
-
-    def _execute_normalization(self, params):
-        """执行标准化操作"""
-        self.progress_manager.start_operation("Normalization")
-        steps = self.progress_manager.get_operation_steps('normalize')
+        """Normalise image"""
+        self.log_widget.append_log("Normalising image...")
         
-        try:
-            msg, val = steps['init']
-            self.progress_manager.update_progress(msg, val)
-            
-            # Initialize SPM with defaults
-            self.matlab_engine._engine.eval("clear matlabbatch;", nargout=0)
-            self.matlab_engine._engine.eval("spm('defaults','pet');", nargout=0)
-            self.matlab_engine._engine.eval("spm_jobman('initcfg');", nargout=0)
-            
-            # Fix paths for MATLAB
-            source_path = params['source_image'].replace('\\', '/')
-            
-            # Use default template if none specified
-            if not params['template']:
-                template_path = os.path.join(
-                    self.matlab_engine._spm_path,
-                    'toolbox', 'OldNorm', 'T1.nii'
-                ).replace('\\', '/')
-            else:
-                template_path = params['template'].replace('\\', '/')
-            
-            # Initialize matlabbatch structure
-            self.matlab_engine._engine.eval("""
-            matlabbatch = {};
-            matlabbatch{1}.spm.tools.oldnorm.est = struct;
-            matlabbatch{1}.spm.tools.oldnorm.est.subj.source = {''};
-            matlabbatch{1}.spm.tools.oldnorm.est.subj.wtsrc = '';
-            matlabbatch{1}.spm.tools.oldnorm.est.eoptions = struct('template',{{''}});
-            """, nargout=0)
-            
-            # Set source and template
-            self.matlab_engine._engine.eval(f"""
-            matlabbatch{{1}}.spm.tools.oldnorm.est.subj.source = {{'{source_path},1'}};
-            matlabbatch{{1}}.spm.tools.oldnorm.est.eoptions.template = {{'{template_path},1'}};
-            """, nargout=0)
-            
-            # Set estimation options
-            self.matlab_engine._engine.eval(f"""
-            matlabbatch{{1}}.spm.tools.oldnorm.est.eoptions.weight = '';
-            matlabbatch{{1}}.spm.tools.oldnorm.est.eoptions.smosrc = {params['source_smoothing']};
-            matlabbatch{{1}}.spm.tools.oldnorm.est.eoptions.smoref = {params['template_smoothing']};
-            matlabbatch{{1}}.spm.tools.oldnorm.est.eoptions.regtype = '{params['affine_regularization']}';
-            matlabbatch{{1}}.spm.tools.oldnorm.est.eoptions.cutoff = {params['nonlinear_cutoff']};
-            matlabbatch{{1}}.spm.tools.oldnorm.est.eoptions.nits = {params['nonlinear_iterations']};
-            matlabbatch{{1}}.spm.tools.oldnorm.est.eoptions.reg = {params['nonlinear_regularization']};
-            """, nargout=0)
-            
-            # Add optional weights if provided
-            if params['source_weight']:
-                weight_path = params['source_weight'].replace('\\', '/')
-                self.matlab_engine._engine.eval(
-                    f"matlabbatch{{1}}.spm.tools.oldnorm.est.subj.wtsrc = {{'{weight_path},1'}};"
-                )
-            
-            if params['template_weight']:
-                template_weight_path = params['template_weight'].replace('\\', '/')
-                self.matlab_engine._engine.eval(
-                    f"matlabbatch{{1}}.spm.tools.oldnorm.est.eoptions.weight = {{'{template_weight_path},1'}};"
-                )
-            
-            # Run estimation
-            self.matlab_engine._engine.eval("spm_jobman('run', matlabbatch);", nargout=0)
-            
-            # Clear batch and setup write operation
-            self.matlab_engine._engine.eval("""
-            clear matlabbatch;
-            matlabbatch = {};
-            matlabbatch{1}.spm.tools.oldnorm.write = struct;
-            """, nargout=0)
-            
-            # Setup write parameters - handle path conversion first
-            images_to_write = [source_path] + (params['other_images'] if params['other_images'] else [])
-            fixed_paths = []
-            for img in images_to_write:
-                if img:  # Skip empty paths
-                    img_fixed = img.replace('\\', '/')
-                    fixed_paths.append(f"'{img_fixed},1'")
-            images_list = ",".join(fixed_paths)
-            
-            self.matlab_engine._engine.eval(f"""
-            matlabbatch{{1}}.spm.tools.oldnorm.write.subj.matname = {{'{source_path}_sn.mat'}};
-            matlabbatch{{1}}.spm.tools.oldnorm.write.subj.resample = {{{images_list}}};
-            matlabbatch{{1}}.spm.tools.oldnorm.write.roptions.preserve = {params['preserve']};
-            matlabbatch{{1}}.spm.tools.oldnorm.write.roptions.bb = [-78 -112 -70; 78 76 85];
-            matlabbatch{{1}}.spm.tools.oldnorm.write.roptions.vox = [{params['voxel_size']} {params['voxel_size']} {params['voxel_size']}];
-            matlabbatch{{1}}.spm.tools.oldnorm.write.roptions.interp = {params['interpolation']};
-            matlabbatch{{1}}.spm.tools.oldnorm.write.roptions.wrap = [{' '.join(str(int(x)) for x in params['wrap'])}];
-            matlabbatch{{1}}.spm.tools.oldnorm.write.roptions.prefix = '{params['prefix']}';
-            """, nargout=0)
-            
-            # Run write operation
-            self.matlab_engine._engine.eval("spm_jobman('run', matlabbatch);", nargout=0)
-            
-            msg, val = steps['complete']
-            self.progress_manager.update_progress(msg, val)
-            self.progress_manager.complete_operation("Normalization completed successfully", True)
-            
-        except Exception as e:
-            self.progress_manager.complete_operation(f"Normalization failed: {str(e)}", False)
-            self.log_widget.append_log(f"Error during normalization: {str(e)}", "ERROR")
-            QMessageBox.critical(self, "Error", f"Normalization failed: {str(e)}")
-
+        dialog = NormalizeDialog(self)
+        # 修改这里以匹配 MatlabEngine 中的方法名
+        dialog.normalise_started.connect(self.matlab_engine.normalize_image)
+        dialog.exec_()
+    
     @pyqtSlot()
     def set_origin(self):
-        """Set the origin of an image"""
-        # Check if an image is already loaded
-        if self.image_view.current_image:
-            image_file = self.image_view.current_image
-            self.log_widget.append_log(f"Using currently loaded image: {image_file}")
-        else:
-            self.log_widget.append_log("Selecting image to set origin...")
-            
-            # Get image from user
-            image_file, _ = QFileDialog.getOpenFileName(
-                self, "Select Image to Set Origin", "", "NIFTI Files (*.nii *.nii.gz *.img);;All Files (*)"
-            )
-            
-            if not image_file:
-                self.log_widget.append_log("Set origin cancelled")
-                return
-                
-            self.log_widget.append_log(f"Selected image: {image_file}")
+        """Set origin of the image"""
+        self.log_widget.append_log("Setting origin of the image...")
         
-        # Ask for coordinates or use default
-        use_custom_coords = QMessageBox.question(
-            self,
-            "Origin Coordinates",
-            "Do you want to specify custom coordinates?\nClick 'No' to use [0, 0, 0].",
-            QMessageBox.Yes | QMessageBox.No
-        ) == QMessageBox.Yes
-        
-        coordinates = None
-        
-        if use_custom_coords:
-            # TODO: Implement a dialog to get coordinates
-            # For now, just use [0, 0, 0]
-            self.log_widget.append_log("Custom coordinates not implemented yet, using [0, 0, 0]")
-        else:
-            self.log_widget.append_log("Using default coordinates [0, 0, 0]")
-        
-        # Set origin
-        try:
-            success = self.matlab_engine.set_origin(image_file, coordinates)
-            
-            if success:
-                self.log_widget.append_log("Origin set successfully", "SUCCESS")
-                
-                # Reload the image
-                self.image_view.display_image(image_file)
-            else:
-                self.log_widget.append_log("Failed to set origin", "ERROR")
-                
-        except Exception as e:
-            self.log_widget.append_log(f"Error setting origin: {str(e)}", "ERROR")
-            QMessageBox.critical(self, "Error", f"Failed to set origin: {str(e)}")
+        file_path, _ = QFileDialog.getOpenFileName(self, "Select NIFTI File", "", "NIFTI Files (*.nii *.nii.gz)")
+        if file_path:
+            self.log_widget.append_log(f"Selected NIFTI file: {file_path}")
+            self.matlab_engine.set_origin(file_path)
     
     @pyqtSlot()
     def check_registration(self):
-        """Check registration of multiple images"""
-        self.log_widget.append_log("Selecting images for registration check...")
+        """Check registration of images"""
+        self.log_widget.append_log("Checking registration of images...")
         
-        # Get images from user
-        image_files, _ = QFileDialog.getOpenFileNames(
-            self, "Select Images to Check Registration", "", "NIFTI Files (*.nii *.nii.gz *.img);;All Files (*)"
-        )
-        
-        if not image_files:
-            self.log_widget.append_log("Registration check cancelled")
-            return
-            
-        self.log_widget.append_log(f"Selected {len(image_files)} images")
-        
-        # Check registration
-        try:
-            success = self.matlab_engine.check_registration(image_files)
-            
-            if success:
-                self.log_widget.append_log("Registration check completed successfully", "SUCCESS")
-            else:
-                self.log_widget.append_log("Registration check failed", "ERROR")
-                
-        except Exception as e:
-            self.log_widget.append_log(f"Error checking registration: {str(e)}", "ERROR")
-            QMessageBox.critical(self, "Error", f"Failed to check registration: {str(e)}")
+        file_paths, _ = QFileDialog.getOpenFileNames(self, "Select NIFTI Files", "", "NIFTI Files (*.nii *.nii.gz)")
+        if file_paths:
+            self.log_widget.append_log(f"Selected NIFTI files: {', '.join(file_paths)}")
+            self.matlab_engine.check_registration(file_paths)
     
     @pyqtSlot()
     def run_matlab_script(self):
-        """运行CL分析"""
-        self.log_widget.append_log("Starting CL analysis...")
-        
-        # 创建分析器实例
-        analyzer = PIBAnalyzer()
-        
-        # 默认参数
-        default_params = {
-            'ref_path': './Centiloid_Std_VOI/nifti/2mm/voi_WhlCbl_2mm.nii',
-            'roi_path': './Centiloid_Std_VOI/nifti/2mm/voi_ctx_2mm.nii',
-            'ad_dir': './AD-100_PET_5070/nifti/',
-            'yc_dir': './YC-0_PET_5070/nifti/',
-            'standard_data': './SupplementaryTable1.xlsx'
-        }
-        
-        # 显示参数选择对话框
-        dialog = CLAnalysisDialog(self)
-        dialog.analysis_started.connect(lambda params: self._execute_cl_analysis(analyzer, params, default_params))
-        dialog.exec_()
-    
-    def _execute_cl_analysis(self, analyzer, params, default_params):
-        """执行CL分析"""
+        """Run CL analysis dialog"""
         try:
-            # 使用用户选择的参数，如果没有提供则使用默认参数
-            final_params = default_params.copy()
-            final_params.update({k: v for k, v in params.items() if v})
-            
-            # 运行分析
-            self.log_widget.append_log("Running CL analysis with parameters:")
-            for k, v in final_params.items():
-                self.log_widget.append_log(f"{k}: {v}")
-            
-            analyzer.run_analysis(
-                final_params['ref_path'],
-                final_params['roi_path'],
-                final_params['ad_dir'],
-                final_params['yc_dir'],
-                final_params['standard_data']
-            )
-            
-            self.log_widget.append_log("CL analysis completed successfully", "SUCCESS")
-            
+            dialog = CLAnalysisDialog(self)
+            dialog.analysis_started.connect(self.run_cl_analysis)
+            dialog.exec_()
         except Exception as e:
-            error_msg = f"Error in CL analysis: {str(e)}"
-            self.log_widget.append_log(error_msg, "ERROR")
-            QMessageBox.critical(self, "Error", error_msg)
+            self.log_widget.append_log(f"Error opening CL Analysis dialog: {str(e)}", "ERROR")
 
-    def closeEvent(self, event):
-        """Handle window close event"""
-        # Stop MATLAB engine if it's running
-        if self.matlab_engine.is_running():
-            self.log_widget.append_log("Stopping MATLAB engine before closing...")
-            self.matlab_engine.stop_engine()
-            
-        event.accept()
+    def run_cl_analysis(self, params):
+        """Execute CL analysis with the given parameters"""
+        self.log_widget.append_log("Starting CL analysis...")
+        try:
+            analyzer = PIBAnalyzer()
+            analyzer.run_analysis(
+                params['ref_path'],
+                params['roi_path'], 
+                params['ad_dir'],
+                params['yc_dir'],
+                params['standard_data']
+            )
+            self.log_widget.append_log("CL analysis completed successfully", "SUCCESS")
+        except Exception as e:
+            self.log_widget.append_log(f"Error during CL analysis: {str(e)}", "ERROR")
+    
+    @pyqtSlot()
+    def convert_to_nifti(self):
+        """Convert DICOM to NIFTI with improved error handling and progress feedback"""
+        try:
+            # Select DICOM directory
+            dicom_dir = QFileDialog.getExistingDirectory(
+                self, 
+                "Select DICOM Directory",
+                "",
+                QFileDialog.ShowDirsOnly
+            )
+            if not dicom_dir:
+                return
 
-    def show_window(self):
-        """Show the main window"""
-        self.show()
+            # Select output directory
+            output_dir = QFileDialog.getExistingDirectory(
+                self, 
+                "Select Output Directory",
+                "",
+                QFileDialog.ShowDirsOnly
+            )
+            if not output_dir:
+                return
 
-if __name__ == "__main__":
+            # Log the selected directories
+            self.log_widget.append_log(f"Selected DICOM directory: {dicom_dir}")
+            self.log_widget.append_log(f"Selected output directory: {output_dir}")
+
+            # Show progress
+            self.progress_bar.setVisible(True)
+            self.progress_bar.setValue(0)
+            QApplication.processEvents()  # Allow GUI update
+
+            # Convert files
+            result_files = self.matlab_engine.convert_to_nifti(dicom_dir, output_dir)
+
+            # Check results
+            if result_files:
+                self.log_widget.append_log(
+                    f"Successfully created {len(result_files)} NIFTI files:",
+                    "SUCCESS"
+                )
+                for f in result_files:
+                    self.log_widget.append_log(f"  {f}")
+            else:
+                self.log_widget.append_log(
+                    "No NIFTI files were created. Check the DICOM files and try again.",
+                    "ERROR"
+                )
+
+        except Exception as e:
+            self.log_widget.append_log(f"Error during conversion: {str(e)}", "ERROR")
+            self.progress_bar.setVisible(False)
+        finally:
+            self.progress_bar.setVisible(False)
+            QApplication.processEvents()
+
+if __name__ == '__main__':
     import sys
-    import signal
-    import socket
-    import time
+    app = QApplication(sys.argv)
     
-    def run_app():
-        """Run the application with proper initialization"""
-        app = QApplication.instance()
-        if app is None:
-            app = QApplication(sys.argv)
-        
-        # Set application properties
-        app.setOrganizationName("MISPM")
-        app.setApplicationName("SPM PyQt Interface")
-        
-        main_window = MainWindow()
-        main_window.show()
-        
-        return app.exec_()
+    # Set application style
+    app.setStyle('Fusion')
     
-    # Enable Ctrl+C handling
-    signal.signal(signal.SIGINT, signal.SIG_DFL)
+    # Create and show main window
+    window = MainWindow()
+    window.show()
     
-    try:
-        # Small delay to allow debugger to connect
-        time.sleep(0.1)
-        
-        # Try running the app
-        exit_code = run_app()
-        sys.exit(exit_code)
-        
-    except socket.error:
-        # Socket errors are expected when debugging is not available
-        print("Notice: Running without debugger")
-        exit_code = run_app()
-        sys.exit(exit_code)
-        
-    except Exception as e:
-        print(f"Fatal error during startup: {e}", file=sys.stderr)
-        sys.exit(1)
+    # Start event loop
+    sys.exit(app.exec_())
