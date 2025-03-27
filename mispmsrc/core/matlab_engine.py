@@ -311,17 +311,7 @@ class MatlabEngine(QObject):
             return False
             
     def coregister_images(self, ref_image, source_image, cost_function="nmi"):
-        """
-        Coregister images using spm_coreg and spm_run_coreg
-        
-        Args:
-            ref_image: Path to the reference image file
-            source_image: Path to the source image file to be coregistered
-            cost_function: Cost function to use for coregistration (mi, nmi, ecc, ncc)
-        
-        Returns:
-            bool: True if successful, False otherwise
-        """
+        """Coregister images using spm_coreg"""
         if not ref_image or not source_image:
             raise ValueError("Reference and source images must be specified")
             
@@ -333,38 +323,43 @@ class MatlabEngine(QObject):
             ref_image = ref_image.replace('\\', '/').replace('//', '/')
             source_image = source_image.replace('\\', '/').replace('//', '/')
             
-            # Validate paths exist
-            if not os.path.exists(ref_image):
-                raise ValueError(f"Reference image not found: {ref_image}")
-            if not os.path.exists(source_image):
-                raise ValueError(f"Source image not found: {source_image}")
+            # Map cost function names to SPM's expected values
+            cost_function_map = {
+                'mutual information': 'mi',
+                'normalised mutual information': 'nmi',
+                'entropy correlation coefficient': 'ecc',
+                'normalised cross correlation': 'ncc'
+            }
+            cost_func = cost_function_map.get(cost_function.lower(), 'nmi')
             
-            # Setup job structure for coregistration
-            self._engine.eval("matlabbatch = {};", nargout=0)
-            self._engine.eval("matlabbatch{1}.spm.spatial.coreg.estwrite.ref = {};", nargout=0)
-            self._engine.eval("matlabbatch{1}.spm.spatial.coreg.estwrite.source = {};", nargout=0)
-            self._engine.eval(f"matlabbatch{{1}}.spm.spatial.coreg.estwrite.ref = {{'{ref_image}'}};", nargout=0)
-            self._engine.eval(f"matlabbatch{{1}}.spm.spatial.coreg.estwrite.source = {{'{source_image}'}};", nargout=0)
+            # Initialize SPM
+            self._engine.eval("spm('defaults','pet');", nargout=0)
+            self._engine.eval("spm_jobman('initcfg');", nargout=0)
+            self._engine.eval("clear matlabbatch;", nargout=0)
+
+            # Create the coregistration batch with fixed parameters
+            matlab_cmd = f"""
+            matlabbatch = {{}}
+            matlabbatch{{1}}.spm.spatial.coreg.estwrite.ref = {{'{ref_image},1'}};
+            matlabbatch{{1}}.spm.spatial.coreg.estwrite.source = {{'{source_image},1'}};
+            matlabbatch{{1}}.spm.spatial.coreg.estwrite.other = {{''}};
+            matlabbatch{{1}}.spm.spatial.coreg.estwrite.eoptions.cost_fun = '{cost_func}';
+            matlabbatch{{1}}.spm.spatial.coreg.estwrite.eoptions.sep = [4 2];
+            matlabbatch{{1}}.spm.spatial.coreg.estwrite.eoptions.tol = [0.02 0.02 0.02 0.001 0.001 0.001 0.01 0.01 0.01 0.001 0.001 0.001];
+            matlabbatch{{1}}.spm.spatial.coreg.estwrite.eoptions.fwhm = [7 7];
+            matlabbatch{{1}}.spm.spatial.coreg.estwrite.roptions.interp = 4;
+            matlabbatch{{1}}.spm.spatial.coreg.estwrite.roptions.wrap = [0 0 0];
+            matlabbatch{{1}}.spm.spatial.coreg.estwrite.roptions.mask = 0;
+            matlabbatch{{1}}.spm.spatial.coreg.estwrite.roptions.prefix = 'r';
+            """
             
-            # Set default parameters
-            self._engine.eval("matlabbatch{1}.spm.spatial.coreg.estwrite.other = {''};", nargout=0)
-            self._engine.eval(f"matlabbatch{{1}}.spm.spatial.coreg.estwrite.eoptions.cost_fun = '{cost_function}';", nargout=0)
-            self._engine.eval("matlabbatch{1}.spm.spatial.coreg.estwrite.eoptions.sep = [4 2];", nargout=0)
-            self._engine.eval("matlabbatch{1}.spm.spatial.coreg.estwrite.eoptions.tol = [0.02 0.02 0.02 0.001 0.001 0.001 0.01 0.01 0.01 0.001 0.001 0.001];", nargout=0)
-            self._engine.eval("matlabbatch{1}.spm.spatial.coreg.estwrite.eoptions.fwhm = [7 7];", nargout=0)
-            self._engine.eval("matlabbatch{1}.spm.spatial.coreg.estwrite.roptions.interp = 4;", nargout=0)
-            self._engine.eval("matlabbatch{1}.spm.spatial.coreg.estwrite.roptions.wrap = [0 0 0];", nargout=0)
-            self._engine.eval("matlabbatch{1}.spm.spatial.coreg.estwrite.roptions.mask = 0;", nargout=0)
-            self._engine.eval("matlabbatch{1}.spm.spatial.coreg.estwrite.roptions.prefix = 'r';", nargout=0)
-            
+            # Execute coregistration
             self.operation_progress.emit("Executing coregistration...", 30)
-            
-            # Run coregistration
-            self._engine.eval("spm_jobman('run', matlabbatch);", nargout=0)
+            self._engine.eval(matlab_cmd, nargout=0)
+            self._engine.eval("spm_jobman('run',matlabbatch);", nargout=0)
             
             self.operation_progress.emit("Coregistration completed", 100)
             self.operation_completed.emit("Coregistration completed successfully", True)
-            
             return True
             
         except Exception as e:

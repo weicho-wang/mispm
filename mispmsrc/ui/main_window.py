@@ -414,11 +414,28 @@ class MainWindow(QMainWindow):
     def _handle_coregistration(self, params):
         """Handle coregistration parameters and call engine"""
         try:
-            self.matlab_engine.coregister_images(
-                params['ref_image'],
-                params['source_image'],
-                params.get('cost_function', 'nmi')
+            # Validate input files exist
+            ref_image = params['ref_image']
+            source_image = params['source_image']
+            
+            if not os.path.exists(ref_image):
+                raise ValueError(f"Reference image not found: {ref_image}")
+            if not os.path.exists(source_image):
+                raise ValueError(f"Source image not found: {source_image}")
+                
+            self.log_widget.append_log(f"Starting coregistration with:")
+            self.log_widget.append_log(f"Reference: {ref_image}")
+            self.log_widget.append_log(f"Source: {source_image}")
+            
+            success = self.matlab_engine.coregister_images(
+                ref_image,
+                source_image,
+                params.get('cost_function', 'nmi').lower().replace(' ', '_')
             )
+            
+            if not success:
+                self.log_widget.append_log("Coregistration failed", "ERROR")
+                
         except Exception as e:
             self.log_widget.append_log(f"Coregistration error: {str(e)}", "ERROR")
 
