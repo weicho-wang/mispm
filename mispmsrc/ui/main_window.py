@@ -12,8 +12,10 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSlot, QSize
 from PyQt5.QtGui import QFont
 
+# Add project root to Python path
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.append(project_root)
+
 sys.path.append(os.path.join(project_root, "core"))  # Ensure this path is correct
 
 from mispmsrc.core.matlab_engine import MatlabEngine
@@ -22,6 +24,8 @@ from mispmsrc.ui.progress_manager import ProgressManager
 from mispmsrc.ui.coreg_dialog import CoregisterDialog
 from mispmsrc.ui.normalize_dialog import NormalizeDialog
 from mispmsrc.ui.image_view import ImageView  # Add this import near other imports
+from mispmsrc.ui.cl_analysis_dialog import CLAnalysisDialog  # Changed from relative to absolute import
+from mispmsrc.CLRefactoring.PIB_SUVr_CLs_calc import PIBAnalyzer  # Changed from relative to absolute import
 
 class LogWidget(QTextEdit):
     """Widget to display log messages"""
@@ -67,7 +71,8 @@ class MainWindow(QMainWindow):
         self.image_view = ImageView(self)
         
         # Set up UI
-        self.run_script_btn = QPushButton("Run MATLAB Script")
+        # self.run_script_btn = QPushButton("Run MATLAB Script")
+        self.run_script_btn = QPushButton("LC Analysis")
         self.setup_ui()
         
         # Connect signals
@@ -157,7 +162,8 @@ class MainWindow(QMainWindow):
         control_layout.addWidget(self.image_group)
         
         # Add run script button
-        self.run_script_btn = QPushButton("Run MATLAB Script")
+        # self.run_script_btn = QPushButton("Run MATLAB Script")
+        self.run_script_btn = QPushButton("LC Analysis")
         self.run_script_btn.setFixedHeight(32)
         control_layout.addWidget(self.run_script_btn)
         
@@ -242,7 +248,7 @@ class MainWindow(QMainWindow):
         other_btns_layout.addStretch(1)
         image_layout.addLayout(other_btns_layout)
         
-        # Run MATLAB Script按钮布局修改
+        # LC Analysis Script按钮布局修改
         control_layout.addWidget(self.run_script_btn, 0, Qt.AlignLeft)
     
     def connect_signals(self):
@@ -853,33 +859,53 @@ class MainWindow(QMainWindow):
     
     @pyqtSlot()
     def run_matlab_script(self):
-        """Run a MATLAB script"""
-        self.log_widget.append_log("Selecting MATLAB script...")
+        """运行CL分析"""
+        self.log_widget.append_log("Starting CL analysis...")
         
-        # Get MATLAB script file from user
-        script_file, _ = QFileDialog.getOpenFileName(
-            self, "Select MATLAB Script", "", "MATLAB Files (*.m);;All Files (*)"
-        )
+        # 创建分析器实例
+        analyzer = PIBAnalyzer()
         
-        if not script_file:
-            self.log_widget.append_log("MATLAB script selection cancelled")
-            return
-            
-        self.log_widget.append_log(f"Selected MATLAB script: {script_file}")
+        # 默认参数
+        default_params = {
+            'ref_path': './Centiloid_Std_VOI/nifti/2mm/voi_WhlCbl_2mm.nii',
+            'roi_path': './Centiloid_Std_VOI/nifti/2mm/voi_ctx_2mm.nii',
+            'ad_dir': './AD-100_PET_5070/nifti/',
+            'yc_dir': './YC-0_PET_5070/nifti/',
+            'standard_data': './SupplementaryTable1.xlsx'
+        }
         
-        # Run the MATLAB script
-        try:
-            success = self.matlab_engine.run_script(script_file)
-            
-            if success:
-                self.log_widget.append_log("MATLAB script ran successfully", "SUCCESS")
-            else:
-                self.log_widget.append_log("Failed to run MATLAB script", "ERROR")
-                
-        except Exception as e:
-            self.log_widget.append_log(f"Error running MATLAB script: {str(e)}", "ERROR")
-            QMessageBox.critical(self, "Error", f"Failed to run MATLAB script: {str(e)}")
+        # 显示参数选择对话框
+        dialog = CLAnalysisDialog(self)
+        dialog.analysis_started.connect(lambda params: self._execute_cl_analysis(analyzer, params, default_params))
+        dialog.exec_()
     
+    def _execute_cl_analysis(self, analyzer, params, default_params):
+        """执行CL分析"""
+        try:
+            # 使用用户选择的参数，如果没有提供则使用默认参数
+            final_params = default_params.copy()
+            final_params.update({k: v for k, v in params.items() if v})
+            
+            # 运行分析
+            self.log_widget.append_log("Running CL analysis with parameters:")
+            for k, v in final_params.items():
+                self.log_widget.append_log(f"{k}: {v}")
+            
+            analyzer.run_analysis(
+                final_params['ref_path'],
+                final_params['roi_path'],
+                final_params['ad_dir'],
+                final_params['yc_dir'],
+                final_params['standard_data']
+            )
+            
+            self.log_widget.append_log("CL analysis completed successfully", "SUCCESS")
+            
+        except Exception as e:
+            error_msg = f"Error in CL analysis: {str(e)}"
+            self.log_widget.append_log(error_msg, "ERROR")
+            QMessageBox.critical(self, "Error", error_msg)
+
     def closeEvent(self, event):
         """Handle window close event"""
         # Stop MATLAB engine if it's running
