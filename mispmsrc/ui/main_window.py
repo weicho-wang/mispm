@@ -445,9 +445,45 @@ class MainWindow(QMainWindow):
         self.log_widget.append_log("Normalising image...")
         
         dialog = NormalizeDialog(self)
-        # 修改这里以匹配 MatlabEngine 中的方法名
-        dialog.normalise_started.connect(self.matlab_engine.normalize_image)
+        dialog.normalise_started.connect(self._handle_normalization)
         dialog.exec_()
+
+    @pyqtSlot(dict)
+    def _handle_normalization(self, params):
+        """Handle normalization parameters and report errors"""
+        try:
+            self.log_widget.append_log("Starting normalization...")
+            if not self.matlab_engine.normalize_image(params):
+                self.log_widget.append_log(
+                    "Normalization failed - check MATLAB console for details",
+                    "ERROR"
+                )
+                QMessageBox.critical(
+                    self,
+                    "Normalization Error",
+                    "Failed to complete normalization.\n\n"
+                    "Common causes:\n"
+                    "- Invalid source image\n"
+                    "- Missing write permissions\n"
+                    "- SPM estimation failure\n\n"
+                    "Check the log for details."
+                )
+            else:
+                self.log_widget.append_log(
+                    "Normalization completed successfully",
+                    "SUCCESS"
+                )
+                
+        except Exception as e:
+            self.log_widget.append_log(
+                f"Normalization error: {str(e)}",
+                "ERROR"
+            )
+            QMessageBox.critical(
+                self,
+                "Normalization Error",
+                f"Error during normalization:\n\n{str(e)}"
+            )
     
     @pyqtSlot()
     def set_origin(self):

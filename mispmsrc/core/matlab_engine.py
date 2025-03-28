@@ -323,37 +323,36 @@ class MatlabEngine(QObject):
             ref_image = ref_image.replace('\\', '/').replace('//', '/')
             source_image = source_image.replace('\\', '/').replace('//', '/')
             
-            # Map cost function names to SPM's expected values
-            cost_function_map = {
-                'mutual information': 'mi',
-                'normalised mutual information': 'nmi',
-                'entropy correlation coefficient': 'ecc',
-                'normalised cross correlation': 'ncc'
-            }
-            cost_func = cost_function_map.get(cost_function.lower(), 'nmi')
-            
             # Initialize SPM
-            self._engine.eval("spm('defaults','pet');", nargout=0)
+            self._engine.eval("spm('defaults','PET');", nargout=0)
             self._engine.eval("spm_jobman('initcfg');", nargout=0)
             self._engine.eval("clear matlabbatch;", nargout=0)
 
-            # Create the coregistration batch with fixed parameters
+            # Create the coregistration batch
             matlab_cmd = f"""
-            matlabbatch = {{}}
-            matlabbatch{{1}}.spm.spatial.coreg.estwrite.ref = {{'{ref_image},1'}};
-            matlabbatch{{1}}.spm.spatial.coreg.estwrite.source = {{'{source_image},1'}};
-            matlabbatch{{1}}.spm.spatial.coreg.estwrite.other = {{''}};
-            matlabbatch{{1}}.spm.spatial.coreg.estwrite.eoptions.cost_fun = '{cost_func}';
-            matlabbatch{{1}}.spm.spatial.coreg.estwrite.eoptions.sep = [4 2];
-            matlabbatch{{1}}.spm.spatial.coreg.estwrite.eoptions.tol = [0.02 0.02 0.02 0.001 0.001 0.001 0.01 0.01 0.01 0.001 0.001 0.001];
-            matlabbatch{{1}}.spm.spatial.coreg.estwrite.eoptions.fwhm = [7 7];
-            matlabbatch{{1}}.spm.spatial.coreg.estwrite.roptions.interp = 4;
-            matlabbatch{{1}}.spm.spatial.coreg.estwrite.roptions.wrap = [0 0 0];
-            matlabbatch{{1}}.spm.spatial.coreg.estwrite.roptions.mask = 0;
-            matlabbatch{{1}}.spm.spatial.coreg.estwrite.roptions.prefix = 'r';
+            matlabbatch = {{}};
+            matlabbatch{{1}}.spm.spatial.coreg.estimate.ref = {{'{ref_image},1'}};
+            matlabbatch{{1}}.spm.spatial.coreg.estimate.source = {{'{source_image},1'}};
+            matlabbatch{{1}}.spm.spatial.coreg.estimate.other = {{''}};
+            matlabbatch{{1}}.spm.spatial.coreg.estimate.eoptions.cost_fun = '{cost_function}';
+            matlabbatch{{1}}.spm.spatial.coreg.estimate.eoptions.sep = [4 2];
+            matlabbatch{{1}}.spm.spatial.coreg.estimate.eoptions.tol = [0.02 0.02 0.02 0.001 0.001 0.001 0.01 0.01 0.01 0.001 0.001 0.001];
+            matlabbatch{{1}}.spm.spatial.coreg.estimate.eoptions.fwhm = [7 7];
+
+            % Run estimation
+            spm_jobman('run', matlabbatch);
+            clear matlabbatch;
+
+            % Setup reslice batch
+            matlabbatch{{1}}.spm.spatial.coreg.write.ref = {{'{ref_image},1'}};
+            matlabbatch{{1}}.spm.spatial.coreg.write.source = {{'{source_image},1'}};
+            matlabbatch{{1}}.spm.spatial.coreg.write.roptions.interp = 4;
+            matlabbatch{{1}}.spm.spatial.coreg.write.roptions.wrap = [0 0 0];
+            matlabbatch{{1}}.spm.spatial.coreg.write.roptions.mask = 0;
+            matlabbatch{{1}}.spm.spatial.coreg.write.roptions.prefix = 'r';
             """
             
-            # Execute coregistration
+            # Execute commands
             self.operation_progress.emit("Executing coregistration...", 30)
             self._engine.eval(matlab_cmd, nargout=0)
             self._engine.eval("spm_jobman('run',matlabbatch);", nargout=0)
@@ -380,79 +379,117 @@ class MatlabEngine(QObject):
     def normalize_image(self, params):
         """Execute normalization with enhanced error handling"""
         try:
-            # Extract required parameters
+            # Validate input parameters
+            if not isinstance(params, dict):
+                raise ValueError("Parameters must be provided as a dictionary")
+                
+            # Extract and validate source image
             source_image = params.get('source_image')
-            template_image = params.get('template')
+            if not source_image or not os.path.exists(source_image):
+                raise ValueError(f"Source image not found: {source_image}")
             
-            if not source_image:
-                raise ValueError("Source image must be specified")
+            # Extract and validate template image
+            template_path = params.get('template_path')
+            if not template_path or not os.path.exists(template_path):
+                raise ValueError(f"Template image not found: {template_path}")
             
-            self.logger.info(f"Normalizing image: {source_image}")
-            self.operation_progress.emit("Starting normalization...", 0)
+            # Check write permissions for output directory
+            output_dir = os.path.dirname(source_image)
+            if not os.access(output_dir, os.W_OK):
+                raise PermissionError(
+                    f"No write permission for output directory: {output_dir}"
+                )
+            
+            # Check if output file already exists and is writeable
+            prefix = params.get('prefix', 'w')
+            output_path = os.path.join(
+                output_dir,
+                f"{prefix}{os.path.basename(source_image)}"
+            )
+            if os.path.exists(output_path):
+                if not os.access(output_path, os.W_OK):
+                    raise PermissionError(f"Cannot overwrite existing file: {output_path}")
             
             # Fix paths for MATLAB
             source_path = source_image.replace('\\', '/').replace('//', '/')
-            if template_image:
-                template_path = template_image.replace('\\', '/').replace('//', '/')
-            else:
-                template_path = os.path.join(self._spm_path, 'canonical', 'T1.nii')
-                template_path = template_path.replace('\\', '/').replace('//', '/')
-                self.logger.info(f"Using default template: {template_path}")
-
-            # Initialize SPM
-            self._engine.eval("spm('defaults','pet');", nargout=0)
-            self._engine.eval("spm_jobman('initcfg');", nargout=0)
-            self._engine.eval("clear matlabbatch;", nargout=0)
-
-            # Create the batch structure - Estimate
+            template_path = template_path.replace('\\', '/').replace('//', '/')
+            self.logger.info(f"Processing source image: {source_path}")
+            
+            # Initialize SPM and modify batch command for Old Normalize
             matlab_cmd = f"""
-            matlabbatch{{1}}.spm.spatial.normalise.est.subj.source = {{'{source_path},1'}};
-            matlabbatch{{1}}.spm.spatial.normalise.est.eoptions.template = {{'{template_path},1'}};
-            matlabbatch{{1}}.spm.spatial.normalise.est.eoptions.weight = '';
-            matlabbatch{{1}}.spm.spatial.normalise.est.eoptions.smosrc = 8;
-            matlabbatch{{1}}.spm.spatial.normalise.est.eoptions.smoref = 0;
-            matlabbatch{{1}}.spm.spatial.normalise.est.eoptions.regtype = 'mni';
-            matlabbatch{{1}}.spm.spatial.normalise.est.eoptions.cutoff = 25;
-            matlabbatch{{1}}.spm.spatial.normalise.est.eoptions.nits = 16;
-            matlabbatch{{1}}.spm.spatial.normalise.est.eoptions.reg = 1;
+            try
+                clear matlabbatch;
+                spm('defaults', 'PET');
+                spm_jobman('initcfg');
+                
+                % Configure batch for SPM12 Old Normalize
+                matlabbatch{{1}}.spm.tools.oldnorm.estwrite.subj.source = {{'{source_path},1'}};
+                matlabbatch{{1}}.spm.tools.oldnorm.estwrite.subj.wtsrc = '';
+                matlabbatch{{1}}.spm.tools.oldnorm.estwrite.subj.resample = {{'{source_path},1'}};
+                matlabbatch{{1}}.spm.tools.oldnorm.estwrite.eoptions.template = {{'{template_path},1'}};
+                matlabbatch{{1}}.spm.tools.oldnorm.estwrite.eoptions.weight = '';
+                matlabbatch{{1}}.spm.tools.oldnorm.estwrite.eoptions.smosrc = {params.get('source_smoothing', 8)};
+                matlabbatch{{1}}.spm.tools.oldnorm.estwrite.eoptions.smoref = {params.get('template_smoothing', 0)};
+                matlabbatch{{1}}.spm.tools.oldnorm.estwrite.eoptions.regtype = 'mni';
+                matlabbatch{{1}}.spm.tools.oldnorm.estwrite.eoptions.cutoff = {params.get('nonlinear_cutoff', 25)};
+                matlabbatch{{1}}.spm.tools.oldnorm.estwrite.eoptions.nits = {params.get('nonlinear_iterations', 16)};
+                matlabbatch{{1}}.spm.tools.oldnorm.estwrite.eoptions.reg = {params.get('nonlinear_reg', 1)};
+                matlabbatch{{1}}.spm.tools.oldnorm.estwrite.roptions.preserve = {int(params.get('preserve', 0))};
+                matlabbatch{{1}}.spm.tools.oldnorm.estwrite.roptions.bb = [-78 -112 -70; 78 76 85];
+                matlabbatch{{1}}.spm.tools.oldnorm.estwrite.roptions.vox = [2 2 2];
+                matlabbatch{{1}}.spm.tools.oldnorm.estwrite.roptions.interp = 1;
+                matlabbatch{{1}}.spm.tools.oldnorm.estwrite.roptions.wrap = [0 0 0];
+                matlabbatch{{1}}.spm.tools.oldnorm.estwrite.roptions.prefix = 'w';
+
+                % Run estimation and writing
+                fprintf('Starting normalization...\\n');
+                spm_jobman('run', matlabbatch);
+                
+                % Verify output file
+                output_file = ['{os.path.dirname(source_path)}/w{os.path.basename(source_path)}'];
+                if ~exist(output_file, 'file')
+                    error('Output file not created: %s', output_file);
+                end
+                
+                fprintf('Normalization completed successfully\\n');
+                
+            catch ME
+                fprintf('Error in normalization: %s\\n', ME.message);
+                if exist(output_file, 'file')
+                    delete(output_file);
+                    fprintf('Removed incomplete output file\\n');
+                end
+                rethrow(ME);
+            end
             """
             
-            # Execute estimation
-            self.operation_progress.emit("Estimating normalization parameters...", 30)
+            # Execute normalization
+            self.operation_progress.emit("Starting normalization...", 30)
             self._engine.eval(matlab_cmd, nargout=0)
-            self._engine.eval("spm_jobman('run', matlabbatch);", nargout=0)
-
-            # Clear batch and create write batch
-            self._engine.eval("clear matlabbatch;", nargout=0)
-
-            # Create the batch structure - Write
-            matlab_cmd = f"""
-            matlabbatch{{1}}.spm.spatial.normalise.write.subj.matname = {{'{source_path}_sn.mat'}};
-            matlabbatch{{1}}.spm.spatial.normalise.write.subj.resample = {{'{source_path},1'}};
-            matlabbatch{{1}}.spm.spatial.normalise.write.roptions.preserve = 0;
-            matlabbatch{{1}}.spm.spatial.normalise.write.roptions.bb = [-78 -112 -70; 78 76 85];
-            matlabbatch{{1}}.spm.spatial.normalise.write.roptions.vox = [2 2 2];
-            matlabbatch{{1}}.spm.spatial.normalise.write.roptions.interp = 1;
-            matlabbatch{{1}}.spm.spatial.normalise.write.roptions.wrap = [0 0 0];
-            matlabbatch{{1}}.spm.spatial.normalise.write.roptions.prefix = 'w';
-            """
-
-            # Execute write operation
-            self.operation_progress.emit("Writing normalized image...", 70)
-            self._engine.eval(matlab_cmd, nargout=0)
-            self._engine.eval("spm_jobman('run', matlabbatch);", nargout=0)
-
+            
+            # Final verification
+            output_path = os.path.join(
+                os.path.dirname(source_path),
+                f"w{os.path.basename(source_path)}"
+            )
+            
+            if not os.path.exists(output_path):
+                raise RuntimeError(f"Output file not created: {output_path}")
+                
+            if os.path.getsize(output_path) == 0:
+                raise RuntimeError(f"Output file is empty: {output_path}")
+            
             self.operation_progress.emit("Normalization completed", 100)
             self.operation_completed.emit("Normalization completed successfully", True)
             return True
-                
+
         except Exception as e:
-            error_msg = f"Error in normalization: {str(e)}"
+            error_msg = f"Normalization error: {str(e)}"
             self.logger.error(error_msg)
             self.engine_error.emit(error_msg)
             self.operation_completed.emit("Normalization failed", False)
             return False
-    
+
     def normalise_image(self, *args, **kwargs):
         """British spelling alias for normalize_image"""
         return self.normalize_image(*args, **kwargs)

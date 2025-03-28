@@ -1,3 +1,5 @@
+import os
+import logging
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QLineEdit, QGroupBox, QComboBox, QFileDialog, QSpinBox,
@@ -13,6 +15,7 @@ class NormalizeDialog(QDialog):
     
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.logger = logging.getLogger(__name__)  # Add logger initialization
         self.setWindowTitle("Normalise: Estimate & Write")
         self.setMinimumWidth(700)
         self.setup_ui()
@@ -220,32 +223,40 @@ class NormalizeDialog(QDialog):
             self.current_bb = dialog.get_bounding_box()
     
     def _run_normalization(self):
-        """Execute normalization with parameter validation"""
-        source_image = self.source_edit.text()
-        if not source_image:
-            QMessageBox.critical(self, "Error", "Source image must be specified")
-            return
+        """收集参数并验证"""
+        try:
+            source_image = self.source_edit.text()
+            if not source_image:
+                raise ValueError("Source image must be specified")
+                
+            if not os.path.exists(source_image):
+                raise ValueError(f"Source image not found: {source_image}")
             
-        # Collect parameters with validation
-        params = {
-            'source_image': source_image,
-            'template': self.template_edit.text() or None,
-            'weight': self.weight_edit.text() or None,
-            'template_weight': self.template_weight_edit.text() or None,
-            'source_smoothing': self.source_smooth.value(),
-            'template_smoothing': self.template_smooth.value(),
-            'affine_reg': self.affine_reg.currentText().lower().replace(' ', '_'),
-            'nonlinear_cutoff': self.cutoff.value(),
-            'nonlinear_iterations': self.iterations.value(),
-            'nonlinear_reg': self.nonlinear_reg.value(),
-            'preserve': self.preserve.currentIndex(),
-            'bounding_box': self.current_bb if self.bb_custom.isChecked() else None,
-            'voxel_size': self.voxel_size.value(),
-            'interpolation': self.interpolation.currentIndex(),
-            'wrap': [self.wrap_x.isChecked(), self.wrap_y.isChecked(), self.wrap_z.isChecked()],
-            'prefix': self.prefix_edit.text() or 'w'
-        }
-        
-        # Emit signal and close dialog
-        self.normalise_started.emit(params)
-        self.accept()
+            # Collect parameters into dictionary
+            params = {
+                'source_image': source_image,
+                'template': self.template_edit.text() or None,  # Make template optional
+                'source_smoothing': self.source_smooth.value(),
+                'template_smoothing': self.template_smooth.value(),
+                'nonlinear_cutoff': self.cutoff.value(),
+                'nonlinear_iterations': self.iterations.value(),
+                'nonlinear_reg': self.nonlinear_reg.value(),
+                'preserve': self.preserve.currentIndex(),
+                'prefix': self.prefix_edit.text() or 'w'
+            }
+            
+            # Only include bounds if custom bounding box is enabled
+            if self.bb_custom.isChecked():
+                params['bounding_box'] = self.current_bb
+                
+            self.logger.debug(f"Normalization parameters: {params}")
+            self.normalise_started.emit(params)
+            self.accept()
+            
+        except Exception as e:
+            self.logger.error(f"Parameter validation error: {str(e)}")
+            QMessageBox.critical(
+                self,
+                "Parameter Error",
+                f"Invalid parameters: {str(e)}\n\nPlease check your inputs."
+            )
