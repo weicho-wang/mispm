@@ -66,3 +66,6 @@ ENV/
 # Local development settings
 .env
 .env.local
+
+# output files
+*.png

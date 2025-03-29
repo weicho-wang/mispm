@@ -1,0 +1,20 @@
+# Core dependencies
+numpy>=1.19.0
+scipy>=1.5.0
+pandas>=1.0.0
+matplotlib>=3.3.0
+nibabel>=3.2.0
+pyqt5>=5.15.0
+tqdm>=4.45.0
+
+# Excel support
+openpyxl>=3.0.0
+
+# For MATLAB Engine (optional, handled separately)
+# matlab>=0.1.0
+
+# Optional dependencies
+xlrd>=2.0.0  # For older Excel files
+
+# Threading support and GUI integration
+pyqtgraph>=0.11.0

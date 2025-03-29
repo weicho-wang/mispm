@@ -37,60 +37,83 @@ class MatlabEngine(QObject):
         self._engine = None
         self._spm_path = None
         self._initialized = True
+        self._is_running = False
+        self._matlab_module = None
         
     def start_engine(self, spm_path=None, timeout=None):
-        """
-        Start the MATLAB engine and initialize SPM
+        """Start the MATLAB engine with SPM initialization
         
         Args:
-            spm_path: Path to SPM installation directory
-            timeout: Timeout for starting the MATLAB engine
-        
+            spm_path: Path to SPM toolbox (optional)
+            timeout: Timeout in seconds for engine start (optional)
+            
         Returns:
-            bool: True if successful, False otherwise
+            bool: Whether the engine was started successfully
         """
+        if self.is_running():
+            self.logger.info("MATLAB engine is already running")
+            return True
+            
         self.logger.info("Starting MATLAB engine...")
         
         try:
-            with tqdm.tqdm(total=100, desc="Starting MATLAB engine") as pbar:
-                self._engine = matlab.engine.start_matlab()
-                pbar.update(20)
+            # Import the matlab.engine module
+            try:
+                import matlab.engine
+                self._matlab_module = matlab.engine
+            except ImportError:
+                self.logger.error("Failed to import matlab.engine. Is MATLAB Engine for Python installed?")
+                raise ImportError("MATLAB Engine for Python is not installed")
+            
+            # Start MATLAB engine asynchronously to avoid UI freezing
+            future = self._matlab_module.start_matlab(background=True)
+            
+            # Wait for the engine to start
+            if timeout:
+                self._engine = future.result(timeout=timeout)
+            else:
+                self._engine = future.result()
                 
-                # Wait for the engine to start with a timeout
-                if timeout:
-                    self._engine.eval("disp('MATLAB engine started')", nargout=0)
-                pbar.update(20)
-                
-                # Set SPM path (default to parent directory if not specified)
-                if spm_path is None:
-                    # Assuming SPM is in the parent directory of the current script
-                    self._spm_path = os.path.abspath(os.path.join(
-                        os.path.dirname(os.path.dirname(__file__)), '..'
-                    ))
-                else:
-                    self._spm_path = spm_path
-                pbar.update(20)
-                    
-                self.logger.info(f"Using SPM path: {self._spm_path}")
-                
-                # Add SPM to MATLAB path
-                self._engine.addpath(self._spm_path)
-                self._engine.addpath(os.path.join(self._spm_path, 'toolbox'))
-                pbar.update(20)
-                
-                # Initialize SPM
+            # Add the project paths to MATLAB path
+            project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+            matlab_dir = os.path.join(project_root, "mispmsrc", "matlab")
+            cl_dir = os.path.join(project_root, "mispmsrc", "CLRefactoring")
+            
+            # Ensure path separators are correct for MATLAB
+            matlab_dir = self._normalize_path(matlab_dir)
+            cl_dir = self._normalize_path(cl_dir)
+            
+            # Add directories to MATLAB path
+            self._engine.addpath(matlab_dir, nargout=0)
+            self._engine.addpath(cl_dir, nargout=0)
+            
+            # Run the startup script instead of the initialization function directly
+            startup_script = os.path.join(matlab_dir, "startup.m")
+            if os.path.exists(startup_script):
+                startup_script = self._normalize_path(startup_script)
+                self._engine.run(startup_script, nargout=0)
+            else:
+                self.logger.warning(f"Could not find startup script at {startup_script}")
+                # If startup script doesn't exist, call initialize_matlab directly
+                self._engine.initialize_matlab(nargout=0)
+            
+            # Add SPM to MATLAB path if provided
+            if spm_path:
+                spm_path = self._normalize_path(spm_path)
+                self._engine.addpath(spm_path, nargout=0)
                 self._engine.eval("spm('defaults', 'PET');", nargout=0)
                 self._engine.eval("spm_jobman('initcfg');", nargout=0)
-                pbar.update(20)
                 
-                self.logger.info("MATLAB engine started successfully")
-                self.engine_started.emit()
-                return True
-                
+            self.logger.info("MATLAB engine started successfully")
+            
+            # Set flag and emit signal
+            self._is_running = True
+            self.engine_started.emit()
+            return True
+            
         except Exception as e:
-            error_msg = f"Failed to start MATLAB engine: {str(e)}"
-            self.logger.error(error_msg)
-            self.engine_error.emit(error_msg)
+            self.logger.error(f"Failed to start MATLAB engine: {str(e)}")
+            self.engine_error.emit(f"Failed to start MATLAB engine: {str(e)}")
             return False
     
     def stop_engine(self):
@@ -107,6 +130,7 @@ class MatlabEngine(QObject):
         try:
             self._engine.quit()
             self._engine = None
+            self._is_running = False
             self.logger.info("MATLAB engine stopped successfully")
             return True
         except Exception as e:
@@ -122,7 +146,7 @@ class MatlabEngine(QObject):
         Returns:
             bool: True if running, False otherwise
         """
-        return self._engine is not None
+        return self._is_running
     
     def call_function(self, func_name, *args, **kwargs):
         """
@@ -208,84 +232,63 @@ class MatlabEngine(QObject):
             return []
     
     def convert_to_nifti(self, dicom_dir, output_dir):
-        """Convert DICOM files to NIFTI using SPM"""
+        """Convert DICOM files to NIFTI format
+        
+        Args:
+            dicom_dir: Directory containing DICOM files
+            output_dir: Directory where NIFTI files will be saved
+            
+        Returns:
+            bool: True if conversion successful
+        """
+        if not self.engine:
+            self.engine_error.emit("MATLAB engine not running")
+            return False
+        
         try:
-            # Fix paths and create output directory
-            dicom_dir = dicom_dir.replace('\\', '/')
-            output_dir = output_dir.replace('\\', '/')
+            # Normalize paths for MATLAB
+            dicom_dir = self._normalize_path(dicom_dir)
+            output_dir = self._normalize_path(output_dir)
             
-            if not os.path.exists(output_dir):
-                os.makedirs(output_dir)
-
-            self.logger.info(f"Processing DICOM directory: {dicom_dir}")
-            self.operation_progress.emit("Starting DICOM conversion...", 0)
-
-            # Initialize SPM
-            self._engine.eval("spm('defaults', 'PET');", nargout=0)
-            self._engine.eval("spm_jobman('initcfg');", nargout=0)
-
-            # Create and execute the MATLAB conversion command
-            matlab_cmd = f"""
-            try
-                % Initialize output variable
-                nii_files = [];
-                
-                % Get DICOM files
-                dicom_files = spm_select('FPList', '{dicom_dir}', '^.*\.(dcm|ima|IMA)$');
-                if isempty(dicom_files)
-                    error('No DICOM files found');
-                end
-                
-                % Read DICOM headers
-                H = spm_dicom_headers(cellstr(dicom_files));
-                if isempty(H)
-                    error('No valid DICOM headers found');
-                end
-                
-                % Configure conversion options
-                options = struct;
-                options.format = 'nii';
-                options.prefix = '';
-                options.outdir = {{'{output_dir}'}};
-                options.meta = false;
-                options.root = 'flat';
-                
-                % Convert files
-                spm_dicom_convert(H, options);
-                
-                % Find created NIFTI files
-                nii_files = spm_select('FPList', '{output_dir}', '^.*\.nii$');
-                if isempty(nii_files)
-                    error('No NIFTI files were created');
-                end
-                
-            catch ME
-                fprintf('Error: %s\\n', ME.message);
-                rethrow(ME);
-            end
-            """
+            # Make sure output directory exists
+            self._ensure_directory_exists(output_dir)
             
-            # Execute conversion
-            self._engine.eval(matlab_cmd, nargout=0)
-            self.operation_progress.emit("Converting files...", 50)
-
-            # Verify output files
-            nifti_files = [f for f in os.listdir(output_dir) if f.endswith('.nii')]
+            # Emit progress signal
+            self.operation_progress.emit("Starting DICOM to NIFTI conversion...", 10)
             
-            if not nifti_files:
-                raise RuntimeError("No NIFTI files were created")
-
-            self.logger.info(f"Successfully created {len(nifti_files)} NIFTI files")
-            self.operation_progress.emit("Conversion completed", 100)
+            # Count DICOM files (for progress reporting)
+            dcm_count = self.engine.count_dicom_files(dicom_dir, nargout=1)
+            if dcm_count == 0:
+                self.operation_progress.emit("No DICOM files found", 100)
+                self.operation_completed.emit("No DICOM files found", False)
+                return False
+                
+            self.operation_progress.emit(f"Found {dcm_count} DICOM files", 20)
             
-            return [os.path.join(output_dir, f) for f in nifti_files]
-
+            # Run conversion with error handling
+            try:
+                # Call MATLAB function
+                self.operation_progress.emit("Converting files...", 50)
+                result = self.engine.convert_dicom_to_nifti(dicom_dir, output_dir, nargout=1)
+                
+                # Check result
+                if result:
+                    self.operation_progress.emit("Conversion complete", 100)
+                    self.operation_completed.emit("DICOM to NIFTI conversion successful", True)
+                    return True
+                else:
+                    self.operation_progress.emit("Conversion failed", 100)
+                    self.operation_completed.emit("DICOM to NIFTI conversion failed", False)
+                    return False
+                    
+            except Exception as e:
+                self.operation_progress.emit("Error during conversion", 100)
+                self.operation_completed.emit(f"DICOM to NIFTI conversion error: {str(e)}", False)
+                return False
+                
         except Exception as e:
-            error_msg = f"Error in DICOM to NIFTI conversion: {str(e)}"
-            self.logger.error(error_msg)
-            self.engine_error.emit(error_msg)
-            self.operation_progress.emit("Conversion failed", 0)
-            return []
+            self.engine_error.emit(f"Error: {str(e)}")
+            return False
 
     def display_image(self, image_file):
         """
@@ -303,13 +306,12 @@ class MatlabEngine(QObject):
             # Display the image using spm_image
             self._engine.eval(f"spm_image('Display', '{image_file}');", nargout=0)
             return True
-            
         except Exception as e:
             error_msg = f"Error displaying image: {str(e)}"
             self.logger.error(error_msg)
             self.engine_error.emit(error_msg)
             return False
-            
+    
     def coregister_images(self, ref_image, source_image, cost_function="nmi"):
         """Coregister images using spm_coreg"""
         if not ref_image or not source_image:
@@ -319,303 +321,345 @@ class MatlabEngine(QObject):
         self.operation_progress.emit("Starting coregistration...", 0)
         
         try:
-            # Fix paths for MATLAB
-            ref_image = ref_image.replace('\\', '/').replace('//', '/')
-            source_image = source_image.replace('\\', '/').replace('//', '/')
+            # Make sure file paths are properly formatted for MATLAB
+            ref_image = self._normalize_path(ref_image)
+            source_image = self._normalize_path(source_image)
             
-            # Initialize SPM
-            self._engine.eval("spm('defaults','PET');", nargout=0)
-            self._engine.eval("spm_jobman('initcfg');", nargout=0)
-            self._engine.eval("clear matlabbatch;", nargout=0)
-
-            # Create the coregistration batch
-            matlab_cmd = f"""
-            matlabbatch = {{}};
-            matlabbatch{{1}}.spm.spatial.coreg.estimate.ref = {{'{ref_image},1'}};
-            matlabbatch{{1}}.spm.spatial.coreg.estimate.source = {{'{source_image},1'}};
-            matlabbatch{{1}}.spm.spatial.coreg.estimate.other = {{''}};
-            matlabbatch{{1}}.spm.spatial.coreg.estimate.eoptions.cost_fun = '{cost_function}';
-            matlabbatch{{1}}.spm.spatial.coreg.estimate.eoptions.sep = [4 2];
-            matlabbatch{{1}}.spm.spatial.coreg.estimate.eoptions.tol = [0.02 0.02 0.02 0.001 0.001 0.001 0.01 0.01 0.01 0.001 0.001 0.001];
-            matlabbatch{{1}}.spm.spatial.coreg.estimate.eoptions.fwhm = [7 7];
-
-            % Run estimation
-            spm_jobman('run', matlabbatch);
-            clear matlabbatch;
-
-            % Setup reslice batch
-            matlabbatch{{1}}.spm.spatial.coreg.write.ref = {{'{ref_image},1'}};
-            matlabbatch{{1}}.spm.spatial.coreg.write.source = {{'{source_image},1'}};
-            matlabbatch{{1}}.spm.spatial.coreg.write.roptions.interp = 4;
-            matlabbatch{{1}}.spm.spatial.coreg.write.roptions.wrap = [0 0 0];
-            matlabbatch{{1}}.spm.spatial.coreg.write.roptions.mask = 0;
-            matlabbatch{{1}}.spm.spatial.coreg.write.roptions.prefix = 'r';
-            """
+            # First check if the coregister function exists (our custom function)
+            has_custom_fn = self._engine.exist('coregister') > 0
             
-            # Execute commands
             self.operation_progress.emit("Executing coregistration...", 30)
-            self._engine.eval(matlab_cmd, nargout=0)
-            self._engine.eval("spm_jobman('run',matlabbatch);", nargout=0)
             
-            self.operation_progress.emit("Coregistration completed", 100)
-            self.operation_completed.emit("Coregistration completed successfully", True)
-            return True
+            if has_custom_fn:
+                # Use our custom coregister function that handles all the details
+                success = self._engine.coregister(ref_image, source_image, cost_function, nargout=1)
+            else:
+                # Fallback to direct SPM commands if our custom function isn't available
+                matlab_cmd = f"""
+                try
+                    % Load volumes for coregistration
+                    ref_vol = spm_vol('{ref_image}');
+                    source_vol = spm_vol('{source_image}');
+                    
+                    % Set options for coregistration
+                    flags = struct('cost_fun', '{cost_function}', ...
+                                   'sep', [4 2], ...
+                                   'tol', [0.02 0.02 0.02 0.001 0.001 0.001 0.01 0.01 0.01 0.001 0.001 0.001], ...
+                                   'fwhm', [7 7]);
+                    
+                    % Run coregistration estimation
+                    x = spm_coreg(ref_vol, source_vol, flags);
+                    
+                    % Apply transformation to source image
+                    M = spm_matrix(x);
+                    spm_get_space(source_vol.fname, source_vol.mat / M);
+                    
+                    % Reslice the image
+                    P = {{ref_vol.fname; source_vol.fname}};
+                    spm_reslice(P, struct('interp', 1, 'mask', true, 'mean', false, 'which', 1, 'prefix', 'r'));
+                    
+                    % Return success
+                    success = true;
+                catch ME
+                    disp(['Error in coregistration: ' ME.message]);
+                    success = false;
+                end
+                """
+                # Execute the script and get the output
+                self._engine.eval(matlab_cmd, nargout=0)
+                success = self._engine.workspace['success']
             
+            if success:
+                self.operation_progress.emit("Coregistration completed", 100)
+                self.operation_completed.emit("Coregistration completed successfully", True)
+                return True
+            else:
+                error_msg = "Coregistration failed"
+                self.operation_completed.emit(error_msg, False)
+                return False
+                
         except Exception as e:
             error_msg = f"Error in coregistration: {str(e)}"
             self.logger.error(error_msg)
             self.engine_error.emit(error_msg)
             self.operation_completed.emit("Coregistration failed", False)
             return False
-
-    def _validate_spm_paths(self, source_path, template_path=None):
-        """Validate paths for SPM operations"""
-        if not os.path.exists(source_path):
-            raise ValueError(f"Source image not found: {source_path}")
-        if template_path and not os.path.exists(template_path):
-            if not template_path.startswith(self._spm_path):
-                raise ValueError(f"Template image not found: {template_path}")
-
-    def normalize_image(self, params):
-        """Execute normalization with enhanced error handling"""
-        try:
-            # Validate input parameters
-            if not isinstance(params, dict):
-                raise ValueError("Parameters must be provided as a dictionary")
+    
+    def batch_coregister_images(self, ref_image, source_files, cost_function="nmi"):
+        """Batch coregister images
+        
+        Args:
+            ref_image: Reference image path
+            source_files: List of source image paths
+            cost_function: Coregistration cost function
+            
+        Returns:
+            dict: Summary of results including success count, failure count, and failed files
+        """
+        if not ref_image or not source_files:
+            raise ValueError("Reference image and source files must be specified")
+            
+        self.logger.info(f"Batch coregistering {len(source_files)} images to {ref_image}")
+        
+        results = {
+            'total': len(source_files),
+            'success': 0,
+            'failed': 0,
+            'failed_files': [],
+            'output_files': []
+        }
+        
+        ref_image = ref_image.replace('\\', '/')
+        
+        for i, source_file in enumerate(source_files):
+            try:
+                source_file = source_file.replace('\\', '/')
+                self.logger.info(f"Coregistering {i+1}/{len(source_files)}: {os.path.basename(source_file)}")
+                self.operation_progress.emit(f"Coregistering {os.path.basename(source_file)}", 
+                                           int((i / len(source_files)) * 100))
                 
-            # Extract and validate source image
-            source_image = params.get('source_image')
-            if not source_image or not os.path.exists(source_image):
-                raise ValueError(f"Source image not found: {source_image}")
+                success = self.coregister_images(ref_image, source_file, cost_function)
+                if success:
+                    self.logger.info(f"Successfully coregistered {source_file}")
+                    results['success'] += 1
+                    source_dir = os.path.dirname(source_file)
+                    source_name = os.path.basename(source_file)
+                    output_file = os.path.join(source_dir, 'r' + source_name)
+                    results['output_files'].append(output_file)
+                else:
+                    self.logger.error(f"Failed to coregister {source_file}")
+                    results['failed'] += 1
+                    results['failed_files'].append(source_file)
+            except Exception as e:
+                self.logger.error(f"Error coregistering {source_file}: {str(e)}")
+                results['failed'] += 1
+                results['failed_files'].append(source_file)
+        
+        success_message = f"Completed batch coregistration: {results['success']}/{results['total']} successful"
+        self.operation_completed.emit(success_message, results['failed'] == 0)
+        return results
+    
+    def normalize_image(self, params):
+        """Execute normalization with SPM
+        
+        Args:
+            params: Dictionary containing normalization parameters
+                - source_image: Image to normalize
+                - template_path: Template image path
+                - source_smoothing: Smoothing for source image (default: 8)
+                - template_smoothing: Smoothing for template (default: 0)
+                - nonlinear_cutoff: Nonlinear frequency cutoff (default: 25)
+                - nonlinear_iterations: Number of nonlinear iterations (default: 16)
+                - nonlinear_reg: Nonlinear regularization (default: 1)
+                - preserve: 0 for preserve concentrations, 1 for preserve amount (default: 0)
+                - prefix: Prefix for output files (default: 'w')
+                - bounding_box: Optional bounding box
+                
+        Returns:
+            bool: Whether normalization was successful
+        """
+        if not self.is_running():
+            raise RuntimeError("MATLAB engine is not running")
             
-            # Extract and validate template image
-            template_path = params.get('template_path')
-            if not template_path or not os.path.exists(template_path):
-                raise ValueError(f"Template image not found: {template_path}")
+        # Validate parameters
+        if not isinstance(params, dict):
+            raise ValueError("Parameters must be provided as a dictionary")
             
-            # Check write permissions for output directory
-            output_dir = os.path.dirname(source_image)
-            if not os.access(output_dir, os.W_OK):
-                raise PermissionError(
-                    f"No write permission for output directory: {output_dir}"
-                )
+        source_image = params.get('source_image')
+        template_path = params.get('template_path')
+        
+        if not source_image or not os.path.exists(source_image):
+            raise ValueError(f"Source image not found: {source_image}")
             
-            # Check if output file already exists and is writeable
-            prefix = params.get('prefix', 'w')
-            output_path = os.path.join(
-                output_dir,
-                f"{prefix}{os.path.basename(source_image)}"
-            )
-            if os.path.exists(output_path):
-                if not os.access(output_path, os.W_OK):
-                    raise PermissionError(f"Cannot overwrite existing file: {output_path}")
+        if not template_path or not os.path.exists(template_path):
+            raise ValueError(f"Template image not found: {template_path}")
             
-            # Fix paths for MATLAB
-            source_path = source_image.replace('\\', '/').replace('//', '/')
-            template_path = template_path.replace('\\', '/').replace('//', '/')
-            self.logger.info(f"Processing source image: {source_path}")
+        # Ensure output directory exists and is writeable
+        output_dir = os.path.dirname(source_image)
+        if not os.access(output_dir, os.W_OK):
+            raise ValueError(f"No write permission for output directory: {output_dir}")
             
-            # Initialize SPM and modify batch command for Old Normalize
+        # Check if output file already exists and is writeable
+        prefix = params.get('prefix', 'w')
+        source_name = os.path.basename(source_image)
+        output_path = os.path.join(output_dir, f"{prefix}{source_name}")
+        
+        if os.path.exists(output_path) and not os.access(output_path, os.W_OK):
+            raise ValueError(f"Output file exists but is not writeable: {output_path}")
+            
+        # Normalize paths for MATLAB
+        source_path = self._normalize_path(source_image)
+        template_path = self._normalize_path(template_path)
+        
+        self.logger.info(f"Normalizing {source_image} to template {template_path}")
+        self.operation_progress.emit("Starting normalization...", 0)
+        
+        try:
+            # First check image compatibility
+            self._engine.eval(f"disp(['Source dimensions: ' num2str(diag(spm_get_space('{source_path}'))')])", nargout=0)
+            self._engine.eval(f"disp(['Template dimensions: ' num2str(diag(spm_get_space('{template_path}'))')])", nargout=0)
+            
+            # Create MATLAB script for normalization
             matlab_cmd = f"""
             try
-                clear matlabbatch;
-                spm('defaults', 'PET');
-                spm_jobman('initcfg');
+                % Load source and template volumes
+                source_vol = spm_vol('{source_path}');
+                template_vol = spm_vol('{template_path}');
                 
-                % Configure batch for SPM12 Old Normalize
-                matlabbatch{{1}}.spm.tools.oldnorm.estwrite.subj.source = {{'{source_path},1'}};
-                matlabbatch{{1}}.spm.tools.oldnorm.estwrite.subj.wtsrc = '';
-                matlabbatch{{1}}.spm.tools.oldnorm.estwrite.subj.resample = {{'{source_path},1'}};
-                matlabbatch{{1}}.spm.tools.oldnorm.estwrite.eoptions.template = {{'{template_path},1'}};
-                matlabbatch{{1}}.spm.tools.oldnorm.estwrite.eoptions.weight = '';
-                matlabbatch{{1}}.spm.tools.oldnorm.estwrite.eoptions.smosrc = {params.get('source_smoothing', 8)};
-                matlabbatch{{1}}.spm.tools.oldnorm.estwrite.eoptions.smoref = {params.get('template_smoothing', 0)};
-                matlabbatch{{1}}.spm.tools.oldnorm.estwrite.eoptions.regtype = 'mni';
-                matlabbatch{{1}}.spm.tools.oldnorm.estwrite.eoptions.cutoff = {params.get('nonlinear_cutoff', 25)};
-                matlabbatch{{1}}.spm.tools.oldnorm.estwrite.eoptions.nits = {params.get('nonlinear_iterations', 16)};
-                matlabbatch{{1}}.spm.tools.oldnorm.estwrite.eoptions.reg = {params.get('nonlinear_reg', 1)};
-                matlabbatch{{1}}.spm.tools.oldnorm.estwrite.roptions.preserve = {int(params.get('preserve', 0))};
-                matlabbatch{{1}}.spm.tools.oldnorm.estwrite.roptions.bb = [-78 -112 -70; 78 76 85];
-                matlabbatch{{1}}.spm.tools.oldnorm.estwrite.roptions.vox = [2 2 2];
-                matlabbatch{{1}}.spm.tools.oldnorm.estwrite.roptions.interp = 1;
-                matlabbatch{{1}}.spm.tools.oldnorm.estwrite.roptions.wrap = [0 0 0];
-                matlabbatch{{1}}.spm.tools.oldnorm.estwrite.roptions.prefix = 'w';
-
-                % Run estimation and writing
-                fprintf('Starting normalization...\\n');
+                % Set up normalization parameters
+                clear matlabbatch;
+                matlabbatch{{1}}.spm.spatial.normalise.estwrite.subj.vol = {{source_vol.fname}};
+                matlabbatch{{1}}.spm.spatial.normalise.estwrite.subj.resample = {{source_vol.fname}};
+                matlabbatch{{1}}.spm.spatial.normalise.estwrite.eoptions.biasreg = 0.0001;
+                matlabbatch{{1}}.spm.spatial.normalise.estwrite.eoptions.biasfwhm = 60;
+                matlabbatch{{1}}.spm.spatial.normalise.estwrite.eoptions.tpm = {{template_vol.fname}};
+                matlabbatch{{1}}.spm.spatial.normalise.estwrite.eoptions.affreg = 'mni';
+                matlabbatch{{1}}.spm.spatial.normalise.estwrite.eoptions.reg = [{params.get('nonlinear_reg', 1)}];
+                matlabbatch{{1}}.spm.spatial.normalise.estwrite.eoptions.fwhm = [{params.get('source_smoothing', 8)}];
+                matlabbatch{{1}}.spm.spatial.normalise.estwrite.eoptions.samp = 3;
+                matlabbatch{{1}}.spm.spatial.normalise.estwrite.woptions.bb = [-78 -112 -70; 78 76 85];
+                matlabbatch{{1}}.spm.spatial.normalise.estwrite.woptions.vox = [2 2 2];
+                matlabbatch{{1}}.spm.spatial.normalise.estwrite.woptions.interp = 4;
+                matlabbatch{{1}}.spm.spatial.normalise.estwrite.woptions.prefix = '{params.get('prefix', 'w')}';
+                
+                % Custom bounding box if specified
+                if {1 if 'bounding_box' in params else 0}
+                    try
+                        bb = {str(params.get('bounding_box', [-78, -112, -70, 78, 76, 85]))};
+                        % First 3 values are min coordinates, last 3 are max coordinates
+                        matlabbatch{{1}}.spm.spatial.normalise.estwrite.woptions.bb = [bb(1:3); bb(4:6)];
+                        disp(['Using custom bounding box: ' mat2str(matlabbatch{{1}}.spm.spatial.normalise.estwrite.woptions.bb)]);
+                    catch
+                        disp('Error setting custom bounding box, using default');
+                    end
+                end
+                
+                % Run normalization
                 spm_jobman('run', matlabbatch);
                 
-                % Verify output file
-                output_file = ['{os.path.dirname(source_path)}/w{os.path.basename(source_path)}'];
-                if ~exist(output_file, 'file')
-                    error('Output file not created: %s', output_file);
-                end
-                
-                fprintf('Normalization completed successfully\\n');
-                
-            catch ME
-                fprintf('Error in normalization: %s\\n', ME.message);
+                % Verify output was created
+                output_file = fullfile('{output_dir}', '{prefix}{source_name}');
                 if exist(output_file, 'file')
-                    delete(output_file);
-                    fprintf('Removed incomplete output file\\n');
+                    disp(['Normalized image created: ' output_file]);
+                    success = true;
+                else
+                    disp(['Warning: Expected output file not found: ' output_file]);
+                    success = false;
                 end
-                rethrow(ME);
+            catch ME
+                disp(['Error in normalization: ' ME.message]);
+                disp(getReport(ME));
+                success = false;
             end
             """
             
+            # Update progress
+            self.operation_progress.emit("Setting up normalization parameters...", 10)
+            
             # Execute normalization
-            self.operation_progress.emit("Starting normalization...", 30)
+            self._engine.eval("spm('defaults', 'PET');", nargout=0)
+            self._engine.eval("spm_jobman('initcfg');", nargout=0)
+            
+            self.operation_progress.emit("Executing normalization...", 30)
             self._engine.eval(matlab_cmd, nargout=0)
             
-            # Final verification
-            output_path = os.path.join(
-                os.path.dirname(source_path),
-                f"w{os.path.basename(source_path)}"
-            )
+            # Check success
+            success = self._engine.workspace['success']
             
-            if not os.path.exists(output_path):
-                raise RuntimeError(f"Output file not created: {output_path}")
+            if success:
+                self.operation_progress.emit("Normalization completed", 100)
+                self.operation_completed.emit("Normalization completed successfully", True)
+                return True
+            else:
+                error_msg = "Normalization failed"
+                self.operation_completed.emit(error_msg, False)
+                return False
                 
-            if os.path.getsize(output_path) == 0:
-                raise RuntimeError(f"Output file is empty: {output_path}")
-            
-            self.operation_progress.emit("Normalization completed", 100)
-            self.operation_completed.emit("Normalization completed successfully", True)
-            return True
-
         except Exception as e:
-            error_msg = f"Normalization error: {str(e)}"
+            error_msg = f"Error in normalization: {str(e)}"
             self.logger.error(error_msg)
             self.engine_error.emit(error_msg)
             self.operation_completed.emit("Normalization failed", False)
             return False
 
-    def normalise_image(self, *args, **kwargs):
-        """British spelling alias for normalize_image"""
-        return self.normalize_image(*args, **kwargs)
-
-    def set_origin(self, image_file, coordinates=None):
-        """
-        Set the origin of an image using spm_image's setorigin function
+    def batch_normalize_images(self, template_path, source_files, params=None):
+        """Batch normalize images to a template
         
         Args:
-            image_file: Path to the image file
-            coordinates: List of x, y, z coordinates for the origin (default: [0, 0, 0])
-        
+            template_path: Path to template image
+            source_files: List of source image paths
+            params: Additional parameters for normalization
+            
         Returns:
-            bool: True if successful, False otherwise
+            dict: Summary of results including success count, failure count, and failed files
         """
-        self.logger.info(f"Setting origin for image: {image_file}")
+        if not template_path or not source_files:
+            raise ValueError("Template path and source files must be specified")
+            
+        self.logger.info(f"Batch normalizing {len(source_files)} images to {template_path}")
         
-        try:
-            # If coordinates are not specified, use [0, 0, 0]
-            if coordinates is None:
-                coordinates = [0, 0, 0]
+        results = {
+            'total': len(source_files),
+            'success': 0,
+            'failed': 0,
+            'failed_files': [],
+            'output_files': []
+        }
+        
+        # Normalize template path
+        template_path = self._normalize_path(template_path)
+        
+        # Process each file
+        for i, source_file in enumerate(source_files):
+            try:
+                # Normalize path
+                source_file = self._normalize_path(source_file)
                 
-            # Display the image first (required for setorigin)
-            self._engine.eval(f"spm_image('Display', '{image_file}');", nargout=0)
-            
-            # Set the origin
-            coord_str = f"{coordinates[0]} {coordinates[1]} {coordinates[2]}"
-            self._engine.eval(f"spm_image('SetOrigin', '{coord_str}');", nargout=0)
-            
-            # Apply the changes
-            self._engine.eval("spm_image('Reorient');", nargout=0)
-            
-            self.operation_completed.emit("Origin set successfully", True)
-            return True
-            
-        except Exception as e:
-            error_msg = f"Error setting origin: {str(e)}"
-            self.logger.error(error_msg)
-            self.engine_error.emit(error_msg)
-            self.operation_completed.emit("Failed to set origin", False)
-            return False
-    
-    def check_registration(self, image_files):
-        """
-        Check registration of multiple images using spm_check_registration
-        
-        Args:
-            image_files: List of paths to image files
-        
-        Returns:
-            bool: True if successful, False otherwise
-        """
-        self.logger.info(f"Checking registration for {len(image_files)} images")
-        
-        try:
-            # Convert Python list to MATLAB cell array of strings
-            images_cell = "{"
-            for i, img in enumerate(image_files):
-                images_cell += f"'{img}'"
-                if i < len(image_files) - 1:
-                    images_cell += ", "
-            images_cell += "}"
-            
-            # Run check registration
-            self._engine.eval(f"spm_check_registration({images_cell});", nargout=0)
-            
-            self.operation_completed.emit("Registration check completed", True)
-            return True
-            
-        except Exception as e:
-            error_msg = f"Error checking registration: {str(e)}"
-            self.logger.error(error_msg)
-            self.engine_error.emit(error_msg)
-            self.operation_completed.emit("Failed to check registration", False)
-            return False
-    
-    def convert_dicom_files_to_nifti(self, dicom_files, output_dir):
-        """
-        Convert individual DICOM files to NIFTI format using SPM
-        
-        Args:
-            dicom_files: List of paths to DICOM files
-            output_dir: Output directory for NIFTI files
-        
-        Returns:
-            list: List of paths to the created NIFTI files
-        """
-        self.logger.info(f"Converting {len(dicom_files)} DICOM files to NIFTI format")
-        self.operation_progress.emit("Starting DICOM to NIFTI conversion...", 0)
-        
-        try:
-            # Create a MATLAB cell array with the dicom files
-            dicom_cell = "{"
-            for i, dicom_file in enumerate(dicom_files):
-                dicom_cell += f"'{dicom_file}'"
-                if i < len(dicom_files) - 1:
-                    dicom_cell += ", "
-            dicom_cell += "}"
-            
-            # Set the files in MATLAB
-            self._engine.eval(f"dicom_files = {dicom_cell};", nargout=0)
-            
-            # Convert DICOM files to NIFTI
-            self._engine.eval("dicom_headers = spm_dicom_headers(dicom_files);", nargout=0)
-            self.operation_progress.emit("Processing DICOM headers...", 30)
-            
-            # Use 'patid' as RootDirectory to organize files by patient ID
-            self._engine.eval(f"nii_files = spm_dicom_convert(dicom_headers, 'all', 'patid', 'nii', '{output_dir}', true);", nargout=0)
-            self.operation_progress.emit("Converting files...", 80)
-            
-            # Get the paths of the created NIFTI files
-            nii_files = self._engine.eval("nii_files.files;")
-            
-            # Convert MATLAB cell array to Python list
-            nii_files_list = []
-            for i in range(len(nii_files)):
-                nii_files_list.append(nii_files[i])
+                self.logger.info(f"Normalizing {i+1}/{len(source_files)}: {os.path.basename(source_file)}")
+                self.operation_progress.emit(f"Normalizing {os.path.basename(source_file)}", 
+                                           int((i / len(source_files)) * 100))
                 
-            self.operation_progress.emit("Conversion completed", 100)
-            self.operation_completed.emit(f"Successfully converted {len(nii_files_list)} files", True)
-            
-            return nii_files_list
-            
-        except Exception as e:
-            error_msg = f"Error in DICOM to NIFTI conversion: {str(e)}"
-            self.logger.error(error_msg)
-            self.engine_error.emit(error_msg)
-            self.operation_completed.emit("Conversion failed", False)
-            return []
+                # Create parameters for this file
+                file_params = {
+                    'source_image': source_file,
+                    'template_path': template_path,
+                    'prefix': 'w'
+                }
+                
+                # Add any extra parameters
+                if params:
+                    file_params.update(params)
+                
+                # Run normalization
+                success = self.normalize_image(file_params)
+                
+                if success:
+                    self.logger.info(f"Successfully normalized {source_file}")
+                    results['success'] += 1
+                    
+                    # Add output file to results
+                    source_dir = os.path.dirname(source_file)
+                    source_name = os.path.basename(source_file)
+                    prefix = file_params.get('prefix', 'w')
+                    output_file = os.path.join(source_dir, f"{prefix}{source_name}")
+                    results['output_files'].append(output_file)
+                else:
+                    self.logger.error(f"Failed to normalize {source_file}")
+                    results['failed'] += 1
+                    results['failed_files'].append(source_file)
+            except Exception as e:
+                self.logger.error(f"Error normalizing {source_file}: {str(e)}")
+                results['failed'] += 1
+                results['failed_files'].append(source_file)
+        
+        # Send completion signal
+        success_message = f"Completed batch normalization: {results['success']}/{results['total']} successful"
+        self.operation_completed.emit(success_message, results['failed'] == 0)
+        
+        return results
+    
+    def _normalize_path(self, path):
+        """Normalize file path for MATLAB by replacing backslashes with forward slashes"""
+        if path:
+            return path.replace('\\', '/')
+        return path

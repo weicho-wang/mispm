@@ -223,7 +223,7 @@ class NormalizeDialog(QDialog):
             self.current_bb = dialog.get_bounding_box()
     
     def _run_normalization(self):
-        """收集参数并验证"""
+        """Collect and validate parameters"""
         try:
             source_image = self.source_edit.text()
             if not source_image:
@@ -231,11 +231,31 @@ class NormalizeDialog(QDialog):
                 
             if not os.path.exists(source_image):
                 raise ValueError(f"Source image not found: {source_image}")
-            
-            # Collect parameters into dictionary
+                
+            template = self.template_edit.text()
+            if not template:
+                # Try to use default template
+                default_templates = [
+                    os.path.join('canonical', 'avg152T1.nii'),
+                    os.path.join('templates', 'T1.nii')
+                ]
+                
+                for rel_path in default_templates:
+                    abs_path = os.path.join(os.path.dirname(source_image), rel_path)
+                    if os.path.exists(abs_path):
+                        template = abs_path
+                        self.logger.info(f"Using default template: {template}")
+                        break
+                        
+                if not template:
+                    raise ValueError("Template image must be specified")
+                
+            if not os.path.exists(template):
+                raise ValueError(f"Template image not found: {template}")
+                
             params = {
                 'source_image': source_image,
-                'template': self.template_edit.text() or None,  # Make template optional
+                'template_path': template,  # Using template_path consistently
                 'source_smoothing': self.source_smooth.value(),
                 'template_smoothing': self.template_smooth.value(),
                 'nonlinear_cutoff': self.cutoff.value(),
@@ -245,16 +265,13 @@ class NormalizeDialog(QDialog):
                 'prefix': self.prefix_edit.text() or 'w'
             }
             
-            # Only include bounds if custom bounding box is enabled
             if self.bb_custom.isChecked():
                 params['bounding_box'] = self.current_bb
                 
-            self.logger.debug(f"Normalization parameters: {params}")
             self.normalise_started.emit(params)
             self.accept()
             
         except Exception as e:
-            self.logger.error(f"Parameter validation error: {str(e)}")
             QMessageBox.critical(
                 self,
                 "Parameter Error",

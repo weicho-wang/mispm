@@ -1,8 +1,11 @@
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QPushButton, 
-    QLabel, QLineEdit, QFileDialog, QGroupBox
+    QLabel, QLineEdit, QFileDialog, QGroupBox, QGridLayout
 )
 from PyQt5.QtCore import Qt, pyqtSignal
+import os
+import glob
+import logging
 
 class CLAnalysisDialog(QDialog):
     """CL分析参数选择对话框"""
@@ -11,6 +14,8 @@ class CLAnalysisDialog(QDialog):
     
     def __init__(self, parent=None):
         super().__init__(parent)
+        # Initialize logger
+        self.logger = logging.getLogger(__name__)
         self.setWindowTitle("CL Analysis Parameters")
         self.setMinimumWidth(600)
         self.setup_ui()
@@ -76,6 +81,28 @@ class CLAnalysisDialog(QDialog):
         files_group.setLayout(files_layout)
         layout.addWidget(files_group)
         
+        # Add patient information group
+        patient_group = QGroupBox("Patient Information")
+        patient_layout = QGridLayout()
+        
+        # Name field
+        self.name_edit = QLineEdit()
+        patient_layout.addWidget(QLabel("姓名:"), 0, 0)
+        patient_layout.addWidget(self.name_edit, 0, 1)
+        
+        # Gender field
+        self.gender_edit = QLineEdit()
+        patient_layout.addWidget(QLabel("性别:"), 0, 2)
+        patient_layout.addWidget(self.gender_edit, 0, 3)
+        
+        # PET ID field
+        self.pet_id_edit = QLineEdit()
+        patient_layout.addWidget(QLabel("PET检查号:"), 0, 4)
+        patient_layout.addWidget(self.pet_id_edit, 0, 5)
+        
+        patient_group.setLayout(patient_layout)
+        layout.addWidget(patient_group)
+        
         # Buttons
         btn_layout = QHBoxLayout()
         self.run_btn = QPushButton("Run Analysis")
@@ -93,11 +120,47 @@ class CLAnalysisDialog(QDialog):
             line_edit.setText(filename)
     
     def _browse_dir(self, line_edit, title):
-        """浏览并选择目录"""
+        """浏览并选择目录，并验证目录中是否有w开头的文件"""
         dirname = QFileDialog.getExistingDirectory(self, title)
         if dirname:
+            # 检查是否有w开头的归一化文件
+            has_norm_files = False
+            norm_file_count = 0
+            for pattern in ['w*.nii', 'w*.nii.gz', 'wr*.nii', 'wr*.nii.gz']:
+                norm_files = glob.glob(os.path.join(dirname, pattern))
+                norm_file_count += len(norm_files)
+                if norm_files:
+                    has_norm_files = True
+                    
+            if has_norm_files:
+                self.logger.info(f"Found {norm_file_count} normalized files in {dirname}")
+            else:
+                from PyQt5.QtWidgets import QMessageBox
+                result = QMessageBox.warning(
+                    self, 
+                    "No Normalized Files", 
+                    "No normalized files (with 'w' or 'wr' prefix) found in the selected directory.\n"
+                    "CL Analysis requires normalized files.\n\n"
+                    "Would you like to select a different directory?",
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.Yes
+                )
+                
+                if result == QMessageBox.Yes:
+                    # Try again with a different directory
+                    return self._browse_dir(line_edit, title)
+            
             line_edit.setText(dirname)
-    
+            
+            # Also check if the directory contains required subject patterns
+            basename = os.path.basename(dirname).upper()
+            if 'AD' in basename:
+                self.logger.info(f"Selected directory appears to be for AD group: {dirname}")
+            elif 'YC' in basename or 'CONTROL' in basename:
+                self.logger.info(f"Selected directory appears to be for YC group: {dirname}")
+            else:
+                self.logger.warning(f"Directory name does not contain expected group indicators (AD/YC): {dirname}")
+
     def _run_analysis(self):
         """收集参数并启动分析"""
         params = {
@@ -105,14 +168,73 @@ class CLAnalysisDialog(QDialog):
             'roi_path': self.roi_edit.text(),
             'ad_dir': self.ad_edit.text(),
             'yc_dir': self.yc_edit.text(),
-            'standard_data': self.std_edit.text()
+            'standard_data': self.std_edit.text(),
+            # Add patient information
+            'patient_info': {
+                'name': self.name_edit.text(),
+                'gender': self.gender_edit.text(),
+                'pet_id': self.pet_id_edit.text()
+            }
         }
         
         # 检查必要的参数是否都已提供
-        if all(params.values()):
-            self.analysis_started.emit(params)
-            self.accept()
-        else:
+        missing_params = []
+        for param_name, param_value in params.items():
+            if param_name != 'patient_info' and not param_value:
+                missing_params.append(param_name)
+        
+        if missing_params:
             from PyQt5.QtWidgets import QMessageBox
-            QMessageBox.warning(self, "Missing Parameters", 
-                              "Please provide all required parameters.")
+            missing_str = ", ".join([p.replace('_', ' ').title() for p in missing_params])
+            QMessageBox.warning(
+                self, 
+                "Missing Parameters", 
+                f"Please provide all required parameters. Missing: {missing_str}"
+            )
+            return
+        
+        # Verify all paths exist
+        invalid_paths = []
+        for param_name, param_value in params.items():
+            if param_name != 'patient_info' and not os.path.exists(param_value):
+                invalid_paths.append(f"{param_name.replace('_', ' ').title()}: {param_value}")
+        
+        if invalid_paths:
+            from PyQt5.QtWidgets import QMessageBox
+            invalid_str = "\n".join(invalid_paths)
+            QMessageBox.warning(
+                self, 
+                "Invalid Paths", 
+                f"The following paths do not exist:\n\n{invalid_str}"
+            )
+            return
+        
+        # For AD and YC directories, verify they contain normalized files
+        for dir_param, dir_name in [('ad_dir', 'AD Directory'), ('yc_dir', 'YC Directory')]:
+            dir_path = params[dir_param]
+            
+            # Check for normalized files
+            has_norm_files = False
+            for pattern in ['w*.nii', 'w*.nii.gz', 'wr*.nii', 'wr*.nii.gz']:
+                if glob.glob(os.path.join(dir_path, pattern)):
+                    has_norm_files = True
+                    break
+            
+            if not has_norm_files:
+                from PyQt5.QtWidgets import QMessageBox
+                result = QMessageBox.warning(
+                    self, 
+                    f"No Normalized Files in {dir_name}", 
+                    f"No normalized files (with 'w' or 'wr' prefix) found in {dir_name}:\n{dir_path}\n\n"
+                    f"CL Analysis requires normalized files.\n\n"
+                    f"Do you want to proceed anyway?",
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.No
+                )
+                
+                if result == QMessageBox.No:
+                    return
+        
+        # All validation passed, emit signal and close dialog
+        self.analysis_started.emit(params)
+        self.accept()

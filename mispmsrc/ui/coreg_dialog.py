@@ -159,13 +159,13 @@ class CoregisterDialog(QDialog):
                 line_edit.setText(filename)
     
     def _run_coregistration(self):
-        """执行协配操作"""
-        # 收集所有参数
+        """Execute coregistration operation"""
+        # Collect all parameters
         params = {
             'ref_image': self.ref_edit.text(),
             'source_image': self.source_edit.text(),
             'other_images': self.other_edit.text().split(';') if self.other_edit.text() else [],
-            'cost_function': self.cost_combo.currentText(),
+            'cost_function': self._get_valid_cost_function(),
             'separation': self.sep_spin.value(),
             'tolerance': self.tol_spin.value(),
             'fwhm': self.fwhm_spin.value(),
@@ -175,6 +175,21 @@ class CoregisterDialog(QDialog):
             'prefix': self.prefix_edit.text()
         }
         
-        # 发送信号并关闭对话框
+        # Send signal and close dialog
         self.coregister_started.emit(params)
         self.accept()
+
+    def _get_valid_cost_function(self):
+        """Convert UI cost function selection to valid SPM parameter"""
+        cost_function_map = {
+            "Mutual Information": "mi",
+            "Normalised Mutual Information": "nmi",
+            "Entropy Correlation Coefficient": "ecc",
+            "Normalised Cross Correlation": "ncc"
+        }
+        
+        # Get the selected cost function text
+        selected = self.cost_combo.currentText()
+        
+        # Return the mapped value or default to nmi
+        return cost_function_map.get(selected, "nmi")
