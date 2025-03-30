@@ -312,6 +312,48 @@ class MatlabEngine(QObject):
             self.engine_error.emit(error_msg)
             return False
     
+    def load_nifti(self, file_path):
+        """
+        Load and display a NIFTI file for viewing (without MATLAB)
+        
+        Args:
+            file_path: Path to the NIFTI image file
+            
+        Returns:
+            bool: True if successful
+        """
+        try:
+            # We'll use the Python viewer directly here
+            from mispmsrc.ui.nifti_viewer import NiftiViewer
+            from PyQt5.QtWidgets import QApplication
+            
+            # Create viewer and configure it for view-only mode
+            viewer = NiftiViewer()
+            viewer.setWindowTitle(f"NIFTI Viewer - View Only - {os.path.basename(file_path)}")
+            
+            # Hide save and set origin buttons
+            viewer.save_btn.setVisible(False)
+            viewer.set_origin_btn.setVisible(False)
+            
+            # Load the NIFTI file
+            success = viewer.load_nifti(file_path)
+            
+            if success:
+                # Show the viewer as a modal dialog
+                viewer.exec_()
+                self.operation_completed.emit("NIFTI file viewed successfully", True)
+                return True
+            else:
+                self.operation_completed.emit("Failed to load NIFTI file", False)
+                return False
+                
+        except Exception as e:
+            error_msg = f"Error viewing NIFTI file: {str(e)}"
+            self.logger.error(error_msg)
+            self.engine_error.emit(error_msg)
+            self.operation_completed.emit("Failed to view NIFTI file", False)
+            return False
+
     def coregister_images(self, ref_image, source_image, cost_function="nmi"):
         """Coregister images using spm_coreg"""
         if not ref_image or not source_image:
@@ -657,6 +699,261 @@ class MatlabEngine(QObject):
         self.operation_completed.emit(success_message, results['failed'] == 0)
         
         return results
+    
+    def import_dicom(self, path):
+        """
+        Import DICOM files for processing
+        
+        Args:
+            path (str or list): Path to DICOM directory or list of DICOM files
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            self.operation_progress.emit("Importing DICOM files...", 0)
+            
+            if isinstance(path, list):
+                # Handle list of DICOM files
+                self.operation_progress.emit(f"Importing {len(path)} DICOM files...", 10)
+                
+                # Create a temporary MATLAB cell array with the file paths
+                files_cell = self.eng.cell(1, len(path))
+                for i, file_path in enumerate(path):
+                    files_cell[0][i] = file_path
+                    
+                # Call MATLAB function to import DICOM files
+                result = self.eng.spm_dicom_convert(files_cell, nargout=1)
+                
+            else:
+                # Handle directory path
+                self.operation_progress.emit(f"Importing DICOM files from directory: {path}", 10)
+                
+                # Call MATLAB function to import DICOM files from directory
+                result = self.eng.spm_dicom_convert(path, nargout=1)
+            
+            self.operation_progress.emit("DICOM import completed", 100)
+            self.operation_completed.emit("DICOM import completed", True)
+            return True
+            
+        except Exception as e:
+            error_msg = str(e)
+            self.operation_completed.emit(f"DICOM import failed: {error_msg}", False)
+            self.engine_error.emit(f"Error during DICOM import: {error_msg}")
+            return False
+    
+    def set_origin(self, image_path, coordinates=None):
+        """Set the origin of a NIFTI image using Python's NiftiViewer
+        
+        Args:
+            image_path: Path to the NIFTI image (may include parameters like "file.nii,1")
+            coordinates: Optional list of 3 coordinates [x, y, z] for the origin
+                If provided, sets origin directly, otherwise opens visual interface
+                
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        # Handle paths that may contain commas and parameters (e.g., "file.nii,1")
+        # Save the original path for MATLAB if needed
+        original_path = image_path
+        
+        # For file operations, extract just the file path without parameters
+        if ',' in image_path:
+            clean_path = image_path.split(',')[0]
+        else:
+            clean_path = image_path
+        
+        if not os.path.exists(clean_path):
+            error_msg = f"File not found: {clean_path}"
+            self.logger.error(error_msg)
+            self.engine_error.emit(error_msg)
+            return False
+            
+        self.logger.info(f"Setting origin for {clean_path}")
+        self.operation_progress.emit("Opening origin setting interface...", 0)
+        
+        try:
+            if coordinates:
+                # Direct setting of origin using coordinates
+                x, y, z = coordinates
+                
+                # Use nibabel directly to set the origin
+                try:
+                    import nibabel as nib
+                    
+                    # Load the image
+                    img = nib.load(clean_path)
+                    
+                    # Create a new affine matrix with the updated origin
+                    new_affine = img.affine.copy()
+                    new_affine[:3, 3] = [x, y, z]
+                    
+                    # Create a new image with the updated affine
+                    new_img = nib.Nifti1Image(img.get_fdata(), new_affine, img.header)
+                    
+                    # Save the new image
+                    nib.save(new_img, clean_path)
+                    
+                    self.operation_progress.emit("Origin set successfully", 100)
+                    self.operation_completed.emit(f"Origin set to [{x}, {y}, {z}]", True)
+                    return True
+                    
+                except ImportError:
+                    # Fall back to MATLAB if nibabel is not available
+                    # Use the original path here for MATLAB
+                    matlab_cmd = f"""
+                    try
+                        % Load the image
+                        V = spm_vol('{original_path}');
+                        
+                        % Create transformation matrix with new origin
+                        M = V.mat;
+                        
+                        % Set the origin (4th column, rows 1-3)
+                        M(1:3, 4) = [{x}; {y}; {z}];
+                        
+                        % Update the header
+                        spm_get_space('{original_path}', M);
+                        
+                        % Verify new origin was set
+                        V_new = spm_vol('{original_path}');
+                        new_origin = V_new.mat(1:3, 4);
+                        
+                        disp(['New origin set to: ' num2str(new_origin')]);
+                        success = true;
+                    catch ME
+                        disp(['Error setting origin: ' ME.message]);
+                        disp(getReport(ME));
+                        success = false;
+                    end
+                    """
+                    # Execute MATLAB command for direct setting
+                    self._engine.eval(matlab_cmd, nargout=0)
+                    
+                    # Check success
+                    success = self._engine.workspace['success']
+                    
+                    if success:
+                        self.operation_progress.emit("Origin set successfully", 100)
+                        self.operation_completed.emit(f"Origin set to [{x}, {y}, {z}]", True)
+                        return True
+                    else:
+                        self.operation_progress.emit("Failed to set origin", 100)
+                        self.operation_completed.emit("Failed to set origin", False)
+                        return False
+            else:
+                # Open Python viewer for interactive origin setting
+                try:
+                    # Import necessary packages with detailed error handling
+                    try:
+                        import nibabel as nib
+                        import matplotlib
+                        from matplotlib.figure import Figure
+                        from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
+                        from mispmsrc.ui.nifti_viewer import NiftiViewer
+                    except ImportError as e:
+                        self.logger.error(f"Required package not found: {str(e)}")
+                        self.operation_progress.emit(f"Missing dependency: {str(e)}", 100)
+                        self.operation_completed.emit(f"Failed to import required package: {str(e)}", False)
+                        return False
+                    
+                    # Update progress
+                    self.operation_progress.emit("Opening NiftiViewer...", 50)
+                    
+                    # Create and show the viewer
+                    viewer = NiftiViewer()
+                    
+                    # Connect origin set signal
+                    def on_origin_set(new_origin):
+                        self.logger.info(f"New origin set: {new_origin}")
+                    
+                    viewer.origin_set.connect(on_origin_set)
+                    
+                    # Load the NIFTI file with the clean path
+                    load_success = viewer.load_nifti(clean_path)
+                    
+                    if not load_success:
+                        self.logger.error(f"Failed to load NIFTI file in viewer: {clean_path}")
+                        self.operation_progress.emit("Failed to load NIFTI file", 100)
+                        self.operation_completed.emit("Failed to load NIFTI file", False)
+                        return False
+                    
+                    # Show the viewer dialog - blocks until closed
+                    result = viewer.exec_()
+                    
+                    if result == 1:  # Dialog accepted (saved)
+                        self.operation_progress.emit("Origin updated successfully", 100)
+                        self.operation_completed.emit("Origin updated and saved", True)
+                        return True
+                    else:
+                        self.operation_progress.emit("Origin setting cancelled", 100)
+                        self.operation_completed.emit("Origin setting cancelled", False)
+                        return False
+                        
+                except Exception as e:
+                    import traceback
+                    error_details = traceback.format_exc()
+                    self.logger.error(f"Error displaying NiftiViewer: {str(e)}\n{error_details}")
+                    self.operation_progress.emit(f"Error displaying NiftiViewer: {str(e)}", 100)
+                    self.operation_completed.emit(f"Failed to open viewer: {str(e)}", False)
+                    return False
+                    
+        except Exception as e:
+            import traceback
+            error_details = traceback.format_exc()
+            error_msg = f"Error setting origin: {str(e)}\n{error_details}"
+            self.logger.error(error_msg)
+            self.engine_error.emit(error_msg)
+            self.operation_completed.emit("Failed to set origin", False)
+            return False
+    
+    def check_registration(self, file_paths):
+        """Check registration of multiple images by displaying them together
+        
+        Args:
+            file_paths: List of NIFTI file paths to check
+            
+        Returns:
+            bool: True if displayed successfully, False otherwise
+        """
+        if not self.is_running():
+            self.engine_error.emit("MATLAB engine not running")
+            return False
+            
+        if not file_paths or len(file_paths) == 0:
+            self.engine_error.emit("No files provided for registration check")
+            return False
+            
+        self.logger.info(f"Checking registration for {len(file_paths)} images")
+        self.operation_progress.emit(f"Opening SPM check registration for {len(file_paths)} images...", 0)
+        
+        try:
+            # Convert file paths to MATLAB-friendly format
+            matlab_paths = []
+            for path in file_paths:
+                # Replace backslashes with forward slashes
+                matlab_path = self._normalize_path(path)
+                matlab_paths.append(matlab_path)
+            
+            # Direct approach using eval and string formatting
+            files_str = "'" + "','".join(matlab_paths) + "'"
+            matlab_cmd = f"spm_check_registration({files_str});"
+            
+            self.operation_progress.emit("Preparing to display images...", 50)
+            
+            # Call SPM check registration with the formatted string
+            self._engine.eval(matlab_cmd, nargout=0)
+            
+            self.operation_progress.emit("Registration check display initialized", 100)
+            self.operation_completed.emit("Registration check complete", True)
+            return True
+            
+        except Exception as e:
+            error_msg = f"Error checking registration: {str(e)}"
+            self.logger.error(error_msg)
+            self.engine_error.emit(error_msg)
+            self.operation_completed.emit("Registration check failed", False)
+            return False
     
     def _normalize_path(self, path):
         """Normalize file path for MATLAB by replacing backslashes with forward slashes"""

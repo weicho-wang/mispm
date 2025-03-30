@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QLineEdit, QGroupBox, QComboBox, QFileDialog, QSpinBox,
-    QDoubleSpinBox, QCheckBox, QGridLayout
+    QDoubleSpinBox, QCheckBox, QGridLayout, QMessageBox
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 
@@ -14,6 +14,12 @@ class CoregisterDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Coregistration")
         self.setMinimumWidth(600)
+        
+        # Store parameters
+        self.reference_file = None
+        self.source_file = None
+        self.cost_function = 'nmi'  # Default to normalized mutual information
+        
         self.setup_ui()
         
     def setup_ui(self):
@@ -160,20 +166,25 @@ class CoregisterDialog(QDialog):
     
     def _run_coregistration(self):
         """Execute coregistration operation"""
+        # Validate required fields first
+        ref_image = self.ref_edit.text().strip()
+        source_image = self.source_edit.text().strip()
+        
+        if not ref_image or not source_image:
+            QMessageBox.warning(
+                self,
+                "Missing Information",
+                "Reference and source images are required.\nPlease select both images before proceeding."
+            )
+            return
+            
+        # Store values for later retrieval by get_parameters()
+        self.reference_file = ref_image
+        self.source_file = source_image
+        self.cost_function = self._get_valid_cost_function()
+        
         # Collect all parameters
-        params = {
-            'ref_image': self.ref_edit.text(),
-            'source_image': self.source_edit.text(),
-            'other_images': self.other_edit.text().split(';') if self.other_edit.text() else [],
-            'cost_function': self._get_valid_cost_function(),
-            'separation': self.sep_spin.value(),
-            'tolerance': self.tol_spin.value(),
-            'fwhm': self.fwhm_spin.value(),
-            'interpolation': self.interp_combo.currentIndex(),
-            'wrap': [self.wrap_x.isChecked(), self.wrap_y.isChecked(), self.wrap_z.isChecked()],
-            'mask': self.mask_check.isChecked(),
-            'prefix': self.prefix_edit.text()
-        }
+        params = self.get_parameters()
         
         # Send signal and close dialog
         self.coregister_started.emit(params)
@@ -193,3 +204,16 @@ class CoregisterDialog(QDialog):
         
         # Return the mapped value or default to nmi
         return cost_function_map.get(selected, "nmi")
+    
+    def get_parameters(self):
+        """Get the coregistration parameters selected by the user
+        
+        Returns:
+            dict: Dictionary containing the selected parameters
+        """
+        # Create simpler parameter structure consistent with how main_window.py uses it
+        return {
+            'reference': self.ref_edit.text().strip(),
+            'source': self.source_edit.text().strip(),
+            'cost_function': self._get_valid_cost_function()
+        }

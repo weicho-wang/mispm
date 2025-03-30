@@ -70,7 +70,6 @@ class MainWindow(QMainWindow):
         self.image_view = ImageView(self)
         
         # Set up UI
-        # self.run_script_btn = QPushButton("Run MATLAB Script")
         self.run_script_btn = QPushButton("LC Analysis")
         self.setup_ui()
         
@@ -84,19 +83,25 @@ class MainWindow(QMainWindow):
         """Set up the UI components"""
         # Set window properties
         self.setWindowTitle("SPM PyQt Interface")
-        self.setMinimumSize(1000, 700)
+        self.setMinimumSize(1200, 800)
         
-        # Create central widget with horizontal split layout
+        # Create central widget with horizontal split layout (two columns)
         central_widget = QWidget()
         main_layout = QHBoxLayout(central_widget)
         main_layout.setSpacing(5)
         main_layout.setContentsMargins(5, 5, 5, 5)
         
-        # Left panel for controls
+        # Left panel for controls (approximately 1/4 of width)
         left_panel = QWidget()
         left_layout = QVBoxLayout(left_panel)
         left_layout.setSpacing(5)
         left_layout.setContentsMargins(2, 2, 2, 2)
+        
+        # Right panel (approximately 3/4 of width)
+        right_panel = QWidget()
+        right_layout = QVBoxLayout(right_panel)
+        right_layout.setSpacing(5)
+        right_layout.setContentsMargins(2, 2, 2, 2)
         
         # Engine controls group
         engine_group = QGroupBox("MATLAB Engine")
@@ -105,8 +110,8 @@ class MainWindow(QMainWindow):
         self.start_engine_btn = QPushButton("Start Engine")
         self.stop_engine_btn = QPushButton("Stop Engine")
         engine_layout.addWidget(self.engine_status_label)
-        engine_layout.addWidget(self.start_engine_btn)
-        engine_layout.addWidget(self.stop_engine_btn)
+        engine_layout.addWidget(self.start_engine_btn, 0, Qt.AlignLeft)
+        engine_layout.addWidget(self.stop_engine_btn, 0, Qt.AlignLeft)
         engine_group.setLayout(engine_layout)
         left_layout.addWidget(engine_group)
         
@@ -115,8 +120,8 @@ class MainWindow(QMainWindow):
         dicom_layout = QVBoxLayout()
         self.import_dicom_btn = QPushButton("Import DICOM")
         self.convert_nifti_btn = QPushButton("Convert To NiFTI")
-        dicom_layout.addWidget(self.import_dicom_btn)
-        dicom_layout.addWidget(self.convert_nifti_btn)
+        dicom_layout.addWidget(self.import_dicom_btn, 0, Qt.AlignLeft)
+        dicom_layout.addWidget(self.convert_nifti_btn, 0, Qt.AlignLeft)
         dicom_group.setLayout(dicom_layout)
         left_layout.addWidget(dicom_group)
         
@@ -124,23 +129,34 @@ class MainWindow(QMainWindow):
         image_group = QGroupBox("Image Processing")
         image_layout = QVBoxLayout()
 
-        # 创建所有按钮
+        # Create all buttons
         self.load_nifti_btn = QPushButton("Load NIFTI")
-        self.coregister_btn = QPushButton("Coregistration")
-        self.normalise_btn = QPushButton("Normalise")
         self.set_origin_btn = QPushButton("Set Origin")
+        self.coregister_btn = QPushButton("Coregistration")
         self.check_reg_btn = QPushButton("Check Registration")
-        self.run_script_btn = QPushButton("LC Analysis")  # LC Analysis 按钮
+        self.normalise_btn = QPushButton("Normalise")
+        self.run_script_btn = QPushButton("LC Analysis")
         
-        # 新增批处理按钮
+        # Batch processing buttons
+        self.batch_set_origin_btn = QPushButton("Batch Set Origin")
         self.batch_coregister_btn = QPushButton("Batch Coregister")
         self.batch_normalise_btn = QPushButton("Batch Normalise")
-        self.batch_set_origin_btn = QPushButton("Batch Set Origin")
         
-        # 添加按钮到布局，让它们左对齐
-        for btn in [self.load_nifti_btn, self.coregister_btn, self.normalise_btn, 
-                   self.set_origin_btn, self.check_reg_btn, self.run_script_btn,
-                   self.batch_coregister_btn, self.batch_normalise_btn, self.batch_set_origin_btn]:
+        # 重新排列按钮顺序 - 按照要求排列
+        button_order = [
+            self.load_nifti_btn,        # 1. Load NIFTI
+            self.set_origin_btn,        # 2. Set Origin
+            self.coregister_btn,        # 3. Coregistration
+            self.check_reg_btn,         # 4. Check Registration
+            self.normalise_btn,         # 5. Normalise
+            self.run_script_btn,        # 6. LC Analysis
+            self.batch_set_origin_btn,  # 7. Batch Set Origin
+            self.batch_coregister_btn,  # 8. Batch Coregister
+            self.batch_normalise_btn    # 9. Batch Normalise
+        ]
+        
+        # Add buttons to layout, left-aligned
+        for btn in button_order:
             btn_layout = QHBoxLayout()
             btn_layout.addWidget(btn)
             btn_layout.addStretch()
@@ -152,19 +168,28 @@ class MainWindow(QMainWindow):
         # Add stretch to push everything up
         left_layout.addStretch()
         
-        # Right panel for log
-        right_panel = QWidget()
-        right_layout = QVBoxLayout(right_panel)
+        # Right panel - upper part: Image Visualization
+        image_view_group = QGroupBox("Image Visualization")
+        self.image_view_layout = QVBoxLayout()  # 保存引用，以便后续更改内容
+        self.image_view_layout.addWidget(self.image_view)
+        image_view_group.setLayout(self.image_view_layout)
+        right_layout.addWidget(image_view_group, 7)  # 70% of right panel height
+        
+        # 创建NIFTI查看器实例，但一开始不显示
+        self.nifti_viewer = None
+        self.is_nifti_viewer_showing = False
+        
+        # Right panel - lower part: Log
         log_group = QGroupBox("Log")
         log_layout = QVBoxLayout()
         self.log_widget = LogWidget()
         log_layout.addWidget(self.log_widget)
         log_group.setLayout(log_layout)
-        right_layout.addWidget(log_group)
+        right_layout.addWidget(log_group, 3)  # 30% of right panel height
         
-        # Add panels to main layout with equal width
-        main_layout.addWidget(left_panel, 1)  # stretch factor 1
-        main_layout.addWidget(right_panel, 1)  # stretch factor 1
+        # Add panels to main layout with proportional width
+        main_layout.addWidget(left_panel, 1)  # 25% of width
+        main_layout.addWidget(right_panel, 3)  # 75% of width
         
         # Set central widget
         self.setCentralWidget(central_widget)
@@ -175,20 +200,20 @@ class MainWindow(QMainWindow):
         
         # Add progress bar to status bar
         self.progress_bar = QProgressBar()
-        self.progress_bar.setFixedHeight(15)  # 减小进度条高度
+        self.progress_bar.setFixedHeight(15)
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
         self.progress_bar.setVisible(False)
-        self.progress_bar.setTextVisible(True)  # 显示进度文字
+        self.progress_bar.setTextVisible(True)
         self.statusBar.addPermanentWidget(self.progress_bar)
         
         # Set initial button states
         self.update_button_states(False)
         
-        # 创建进度管理器
+        # Create progress manager
         self.progress_manager = ProgressManager(self.progress_bar, self.statusBar)
         
-        # 创建按钮列表以统一设置样式
+        # Create button list for uniform styling
         all_buttons = [
             self.start_engine_btn, 
             self.stop_engine_btn,
@@ -199,49 +224,16 @@ class MainWindow(QMainWindow):
             self.set_origin_btn,
             self.check_reg_btn,
             self.run_script_btn,
-            self.convert_nifti_btn,  # 新增按钮
+            self.convert_nifti_btn,
             self.batch_coregister_btn,
             self.batch_normalise_btn,
             self.batch_set_origin_btn
         ]
         
-        # 统一设置所有按钮的样式
+        # Apply uniform styling to all buttons
         for btn in all_buttons:
-            btn.setFixedHeight(25)  # 统一高度
-            btn.setFixedWidth(120)  # 统一宽度
-        
-        # 修改布局对齐方式
-        engine_layout.addWidget(self.engine_status_label)
-        engine_layout.addWidget(self.start_engine_btn, 0, Qt.AlignLeft)
-        engine_layout.addWidget(self.stop_engine_btn, 0, Qt.AlignLeft)
-        
-        # DICOM转换布局修改
-        dicom_layout.addWidget(self.import_dicom_btn, 0, Qt.AlignLeft)
-        
-        # Load NIFTI按钮布局修改
-        image_layout.addWidget(self.load_nifti_btn, 0, Qt.AlignLeft)
-        
-        # Coregistration布局修改
-        coreg_layout = QHBoxLayout()
-        coreg_layout.addWidget(self.coregister_btn, 0)
-        coreg_layout.addStretch(1)
-        image_layout.addLayout(coreg_layout)
-        
-        # Normalisation布局修改
-        normalise_layout = QHBoxLayout()
-        normalise_layout.addWidget(self.normalise_btn, 0)
-        normalise_layout.addStretch(1)
-        image_layout.addLayout(normalise_layout)
-        
-        # Set Origin和Check Registration按钮布局修改
-        other_btns_layout = QHBoxLayout()
-        other_btns_layout.addWidget(self.set_origin_btn, 0)
-        other_btns_layout.addWidget(self.check_reg_btn, 0)
-        other_btns_layout.addStretch(1)
-        image_layout.addLayout(other_btns_layout)
-        
-        # LC Analysis Script按钮布局修改
-        left_layout.addWidget(self.run_script_btn, 0, Qt.AlignLeft)
+            btn.setFixedHeight(25)
+            btn.setFixedWidth(120)
     
     def connect_signals(self):
         """Connect UI signals to slots"""
@@ -257,7 +249,7 @@ class MainWindow(QMainWindow):
         
         # Button signals
         self.import_dicom_btn.clicked.connect(self.import_dicom)
-        self.load_nifti_btn.clicked.connect(self.load_nifti)  # This will now handle both loading and importing
+        self.load_nifti_btn.clicked.connect(self.load_nifti)  # Now calls our new method for viewing only
         self.coregister_btn.clicked.connect(self.coregister_images)
         self.normalise_btn.clicked.connect(self.normalise_image)
         self.set_origin_btn.clicked.connect(self.set_origin)
@@ -399,121 +391,231 @@ class MainWindow(QMainWindow):
         if msgBox.clickedButton() == QMessageBox.Cancel:
             return
         
+        # Get output directory
+        output_dir = QFileDialog.getExistingDirectory(
+            self, 
+            "Select Output Directory for NIFTI Files",
+            "",
+            QFileDialog.ShowDirsOnly
+        )
+        if not output_dir:
+            self.log_widget.append_log("No output directory selected, canceling import", "WARNING")
+            return
+        
         if msgBox.clickedButton() == folder_btn:
             # Select directory
             directory = QFileDialog.getExistingDirectory(self, "Select DICOM Directory")
             if directory:
                 self.log_widget.append_log(f"Selected DICOM directory: {directory}")
-                self.matlab_engine.import_dicom(directory)
+                result_files = self.matlab_engine.convert_to_nifti(directory, output_dir)
+                if result_files:
+                    self.log_widget.append_log(f"Successfully converted {len(result_files)} DICOM files to NIFTI", "SUCCESS")
+                else:
+                    self.log_widget.append_log("No NIFTI files were created", "ERROR")
         elif msgBox.clickedButton() == files_btn:
             # Select files
             files, _ = QFileDialog.getOpenFileNames(self, "Select DICOM Files", "", "DICOM Files (*.dcm)")
             if files:
-                self.log_widget.append_log(f"Selected DICOM files: {', '.join(files)}")
-                self.matlab_engine.import_dicom(files)
+                # For individual files, we need a temporary directory
+                import tempfile
+                temp_dir = tempfile.mkdtemp()
+                self.log_widget.append_log(f"Selected {len(files)} DICOM files")
+                
+                # Copy files to temp directory
+                import shutil
+                for file_path in files:
+                    shutil.copy(file_path, temp_dir)
+                
+                # Convert from temp directory
+                result_files = self.matlab_engine.convert_to_nifti(temp_dir, output_dir)
+                
+                # Clean up temp directory
+                shutil.rmtree(temp_dir, ignore_errors=True)
+                
+                if result_files:
+                    self.log_widget.append_log(f"Successfully converted {len(result_files)} DICOM files to NIFTI", "SUCCESS")
+                else:
+                    self.log_widget.append_log("No NIFTI files were created", "ERROR")
     
     @pyqtSlot()
     def load_nifti(self):
-        """Load NIFTI file"""
-        self.log_widget.append_log("Loading NIFTI file...")
+        """Load NIFTI file for viewing only (without setting origin)"""
+        self.log_widget.append_log("Loading NIFTI file for viewing...")
         
         file_path, _ = QFileDialog.getOpenFileName(self, "Select NIFTI File", "", "NIFTI Files (*.nii *.nii.gz)")
         if file_path:
             self.log_widget.append_log(f"Selected NIFTI file: {file_path}")
-            self.matlab_engine.load_nifti(file_path)
-    
-    @pyqtSlot()
-    def coregister_images(self):
-        """Coregister images"""
-        self.log_widget.append_log("Coregistering images...")
-        
-        dialog = CoregisterDialog(self)
-        dialog.coregister_started.connect(self._handle_coregistration)  # Changed
-        dialog.exec_()
-        
-    def _handle_coregistration(self, params):
-        """Handle coregistration parameters and call engine"""
-        try:
-            # Validate input files exist
-            ref_image = params['ref_image']
-            source_image = params['source_image']
             
-            if not os.path.exists(ref_image):
-                raise ValueError(f"Reference image not found: {ref_image}")
-            if not os.path.exists(source_image):
-                raise ValueError(f"Source image not found: {source_image}")
+            # 添加简洁的提示
+            self.log_widget.append_log("Loading NIFTI viewer in visualization panel...")
+            
+            try:
+                # 尝试导入所需包
+                import nibabel
+                import matplotlib
+                from matplotlib.figure import Figure
                 
-            self.log_widget.append_log(f"Starting coregistration with:")
-            self.log_widget.append_log(f"Reference: {ref_image}")
-            self.log_widget.append_log(f"Source: {source_image}")
-            
-            success = self.matlab_engine.coregister_images(
-                ref_image,
-                source_image,
-                params.get('cost_function', 'nmi').lower().replace(' ', '_')
-            )
-            
-            if not success:
-                self.log_widget.append_log("Coregistration failed", "ERROR")
-                
-        except Exception as e:
-            self.log_widget.append_log(f"Coregistration error: {str(e)}", "ERROR")
-
-    @pyqtSlot()
-    def normalise_image(self):
-        """Normalise image"""
-        self.log_widget.append_log("Normalising image...")
-        
-        dialog = NormalizeDialog(self)
-        dialog.normalise_started.connect(self._handle_normalization)
-        dialog.exec_()
-
-    @pyqtSlot(dict)
-    def _handle_normalization(self, params):
-        """Handle normalization parameters and report errors"""
-        try:
-            self.log_widget.append_log("Starting normalization...")
-            if not self.matlab_engine.normalize_image(params):
-                self.log_widget.append_log(
-                    "Normalization failed - check MATLAB console for details",
-                    "ERROR"
-                )
+                # 如果导入成功，在主窗口中显示NIFTI查看器
+                self.view_nifti_image(file_path)
+                    
+            except ImportError as e:
+                # 优雅地处理缺少依赖项
+                self.log_widget.append_log(f"Missing required packages: {str(e)}", "ERROR")
                 QMessageBox.critical(
                     self,
-                    "Normalization Error",
-                    "Failed to complete normalization.\n\n"
-                    "Common causes:\n"
-                    "- Invalid source image\n"
-                    "- Missing write permissions\n"
-                    "- SPM estimation failure\n\n"
-                    "Check the log for details."
+                    "Missing Dependencies",
+                    f"Could not open NIFTI viewer due to missing dependencies:\n\n{str(e)}\n\n"
+                    "Please install the required packages by running:\n"
+                    "pip install -r requirements.txt"
                 )
-            else:
-                self.log_widget.append_log(
-                    "Normalization completed successfully",
-                    "SUCCESS"
+            except Exception as e:
+                # 处理其他错误
+                self.log_widget.append_log(f"Error: {str(e)}", "ERROR")
+                QMessageBox.critical(
+                    self,
+                    "Error",
+                    f"An error occurred while opening the viewer:\n\n{str(e)}"
                 )
+
+    def view_nifti_image(self, file_path):
+        """View NIFTI image in the visualization panel instead of a separate window"""
+        try:
+            # 导入NIFTI查看器类
+            from mispmsrc.ui.nifti_viewer import NiftiViewer
+            
+            # 如果已经有查看器，先移除它
+            self.hide_nifti_viewer()
+            
+            # 创建查看器实例
+            self.nifti_viewer = NiftiViewer(self)
+            
+            # 将查看器设置为嵌入式模式 - 隐藏操作按钮
+            self.nifti_viewer.save_btn.setVisible(False)
+            self.nifti_viewer.set_origin_btn.setVisible(False)
+            self.nifti_viewer.close_btn.setText("Return to Main View")
+            self.nifti_viewer.close_btn.clicked.disconnect()  # 移除原有连接
+            self.nifti_viewer.close_btn.clicked.connect(self.hide_nifti_viewer)  # 添加新连接
+            
+            # 加载NIFTI文件
+            success = self.nifti_viewer.load_nifti(file_path)
+            
+            if success:
+                # 隐藏图像查看器
+                self.image_view.setVisible(False)
                 
+                # 将NIFTI查看器添加到图像查看布局中
+                self.image_view_layout.addWidget(self.nifti_viewer)
+                self.nifti_viewer.setVisible(True)
+                self.is_nifti_viewer_showing = True
+                
+                # 添加状态信息
+                self.log_widget.append_log("NIFTI viewer displayed in visualization panel")
+            else:
+                self.log_widget.append_log("Failed to load NIFTI file in viewer", "ERROR")
+                self.nifti_viewer = None
         except Exception as e:
-            self.log_widget.append_log(
-                f"Normalization error: {str(e)}",
-                "ERROR"
-            )
-            QMessageBox.critical(
-                self,
-                "Normalization Error",
-                f"Error during normalization:\n\n{str(e)}"
-            )
-    
+            import traceback
+            self.log_widget.append_log(f"Error viewing NIFTI file: {str(e)}", "ERROR")
+            self.logger.error(traceback.format_exc())
+            
+    def hide_nifti_viewer(self):
+        """隐藏NIFTI查看器，恢复主界面图像查看器"""
+        if self.nifti_viewer and self.is_nifti_viewer_showing:
+            # 从布局中移除NIFTI查看器
+            self.image_view_layout.removeWidget(self.nifti_viewer)
+            self.nifti_viewer.setVisible(False)
+            self.nifti_viewer = None
+            self.is_nifti_viewer_showing = False
+            
+            # 显示回原图像查看器
+            self.image_view.setVisible(True)
+            self.log_widget.append_log("Returned to main view")
+
     @pyqtSlot()
     def set_origin(self):
-        """Set origin of the image"""
-        self.log_widget.append_log("Setting origin of the image...")
+        """Set origin of the image using Python's NIFTI viewer embedded in main window"""
+        self.log_widget.append_log("Opening origin setting interface...")
         
         file_path, _ = QFileDialog.getOpenFileName(self, "Select NIFTI File", "", "NIFTI Files (*.nii *.nii.gz)")
         if file_path:
             self.log_widget.append_log(f"Selected NIFTI file: {file_path}")
-            self.matlab_engine.set_origin(file_path)
+            
+            # 添加提示
+            self.log_widget.append_log("Loading origin setting interface in visualization panel...")
+            
+            try:
+                # 尝试导入所需包
+                import nibabel
+                import matplotlib
+                from matplotlib.figure import Figure
+                from mispmsrc.ui.nifti_viewer import NiftiViewer
+                
+                # 如果已经有查看器，先移除它
+                self.hide_nifti_viewer()
+                
+                # 创建查看器实例
+                self.nifti_viewer = NiftiViewer(self)
+                
+                # 添加信号连接，处理原点设置
+                self.nifti_viewer.origin_set.connect(self.on_origin_set)
+                
+                # 修改关闭按钮行为
+                self.nifti_viewer.close_btn.setText("Return to Main View")
+                self.nifti_viewer.close_btn.clicked.disconnect()  # 移除原有连接
+                self.nifti_viewer.close_btn.clicked.connect(self.hide_nifti_viewer)  # 添加新连接
+                
+                # 加载NIFTI文件
+                success = self.nifti_viewer.load_nifti(file_path)
+                
+                if success:
+                    # 隐藏图像查看器
+                    self.image_view.setVisible(False)
+                    
+                    # 将NIFTI查看器添加到图像查看布局中
+                    self.image_view_layout.addWidget(self.nifti_viewer)
+                    self.nifti_viewer.setVisible(True)
+                    self.is_nifti_viewer_showing = True
+                    
+                    # 添加状态信息
+                    self.log_widget.append_log("Origin setting interface displayed in visualization panel")
+                else:
+                    self.log_widget.append_log("Failed to load NIFTI file", "ERROR")
+                    self.nifti_viewer = None
+                    
+            except ImportError as e:
+                # 优雅地处理缺少依赖项
+                self.log_widget.append_log(f"Missing required packages: {str(e)}", "ERROR")
+                QMessageBox.critical(
+                    self,
+                    "Missing Dependencies",
+                    f"Could not open NIFTI viewer due to missing dependencies:\n\n{str(e)}\n\n"
+                    "Please install the required packages by running:\n"
+                    "pip install -r requirements.txt"
+                )
+            except Exception as e:
+                # 处理其他错误
+                self.log_widget.append_log(f"Error: {str(e)}", "ERROR")
+                QMessageBox.critical(
+                    self,
+                    "Error",
+                    f"An error occurred while setting origin:\n\n{str(e)}"
+                )
+    
+    def on_origin_set(self, coordinates):
+        """当用户在NIFTI查看器中设置原点时调用"""
+        try:
+            x, y, z = coordinates
+            self.log_widget.append_log(f"New origin set: X={x:.2f}, Y={y:.2f}, Z={z:.2f}", "SUCCESS")
+            
+            # 可以在这里添加调用MATLAB引擎设置原点的代码
+            if self.nifti_viewer and hasattr(self.nifti_viewer, 'image_file'):
+                success = self.matlab_engine.set_origin(self.nifti_viewer.image_file, coordinates)
+                if success:
+                    self.log_widget.append_log("Origin coordinates saved successfully", "SUCCESS")
+                else:
+                    self.log_widget.append_log("Failed to save origin coordinates", "ERROR")
+        except Exception as e:
+            self.log_widget.append_log(f"Error processing origin coordinates: {str(e)}", "ERROR")
     
     @pyqtSlot()
     def check_registration(self):
@@ -545,15 +647,13 @@ class MainWindow(QMainWindow):
                 self.log_widget.append_log("CL analysis parameters set", "INFO")
             else:
                 self.log_widget.append_log("CL analysis canceled", "INFO")
-        
         except Exception as e:
             self.log_widget.append_log(f"Error showing CL analysis dialog: {str(e)}", "ERROR")
             self.logger.error(f"Error in CL analysis dialog: {str(e)}", exc_info=True)
-            
-            # Import and use the error dialog
+            # Import and use the error dialogs
             from mispmsrc.utils.error_reporter import handle_exception
             handle_exception(e, "Failed to open CL analysis dialog", self, self.logger)
-
+    
     def run_cl_analysis(self, params):
         """Execute CL analysis with the given parameters"""
         self.log_widget.append_log("Starting CL analysis...")
@@ -587,7 +687,7 @@ class MainWindow(QMainWindow):
                     self.analyzer = analyzer
                     self.params = params
                     self.exception = None
-                    
+                
                 def run(self):
                     try:
                         # Setup log capture for progress updates
@@ -614,7 +714,7 @@ class MainWindow(QMainWindow):
                                     if key in msg.lower():
                                         progress = value
                                         break
-                                        
+                                
                                 if progress:
                                     self.progress_signal.emit(msg, progress)
                         
@@ -644,7 +744,6 @@ class MainWindow(QMainWindow):
                         import traceback
                         self.exception = (str(e), traceback.format_exc())
                         self.finished.emit(False, "")
-                        
                         # Remove our custom handler in case of error
                         try:
                             logging.getLogger().removeHandler(handler)
@@ -664,7 +763,7 @@ class MainWindow(QMainWindow):
             self.progress_manager.complete_operation("CL Analysis failed", False)
             import traceback
             self.logger.error(traceback.format_exc())
-
+    
     def _on_analysis_finished(self, success, output_dir):
         """Handle analysis thread completion"""
         if success:
@@ -690,7 +789,6 @@ class MainWindow(QMainWindow):
                 self.logger.error(traceback_text)
             else:
                 self.log_widget.append_log("CL analysis failed", "ERROR")
-                
             self.progress_manager.complete_operation("CL Analysis failed", False)
 
     def _get_latest_report_files(self, output_dir):
@@ -705,18 +803,18 @@ class MainWindow(QMainWindow):
         if not output_dir or not os.path.exists(output_dir):
             self.log_widget.append_log(f"Output directory not found: {output_dir}", "ERROR")
             return []
-            
+        
         self.log_widget.append_log(f"Searching for report files in {output_dir}...", "INFO")
         
         # Get all output files with recognized extensions in the output directory
         all_files = []
         for ext in ['*.pdf', '*.png', '*.jpg', '*.svg']:
             all_files.extend(glob.glob(os.path.join(output_dir, ext)))
-        
+            
         if not all_files:
             self.log_widget.append_log("No report files found in output directory", "WARNING")
             return []
-            
+        
         # Filter files generated in the last minute (assuming reports were just created)
         current_time = time.time()
         recent_files = [f for f in all_files if os.path.getmtime(f) > current_time - 60]
@@ -748,13 +846,12 @@ class MainWindow(QMainWindow):
         if not file_paths:
             self.log_widget.append_log("No report files to display", "WARNING")
             return
-        
+            
         self.log_widget.append_log(f"Opening report files...", "SUCCESS")
         
         # Choose which file to open - prefer summary report if available
         files_to_open = []
         summary_file = next((f for f in file_paths if 'summary' in f.lower() or 'report' in f.lower()), None)
-        
         if summary_file:
             self.log_widget.append_log(f"Found summary report: {os.path.basename(summary_file)}", "INFO")
             # Add summary report first
@@ -773,7 +870,6 @@ class MainWindow(QMainWindow):
                 if not os.path.exists(file_path):
                     self.log_widget.append_log(f"File not found: {file_path}", "ERROR")
                     continue
-                    
                 if os.path.getsize(file_path) == 0:
                     self.log_widget.append_log(f"Empty file: {file_path}", "ERROR")
                     continue
@@ -801,7 +897,7 @@ class MainWindow(QMainWindow):
             formats = set(os.path.splitext(f)[1].lower() for f in file_paths)
             format_str = ", ".join(f.replace('.', '').upper() for f in formats)
             self.log_widget.append_log(f"Report format(s): {format_str}", "INFO")
-
+    
     @pyqtSlot()
     def convert_to_nifti(self):
         """Convert DICOM to NIFTI with improved error handling and progress feedback"""
@@ -825,7 +921,7 @@ class MainWindow(QMainWindow):
             )
             if not output_dir:
                 return
-
+            
             # Log the selected directories
             self.log_widget.append_log(f"Selected DICOM directory: {dicom_dir}")
             self.log_widget.append_log(f"Selected output directory: {output_dir}")
@@ -861,20 +957,20 @@ class MainWindow(QMainWindow):
     
     @pyqtSlot()
     def batch_coregister_images(self):
-        """批量协配图像"""
+        """Batch coregister multiple images"""
         self.log_widget.append_log("Batch coregistering images...")
         
-        # 选择参考图像
+        # Select reference image
         ref_image, _ = QFileDialog.getOpenFileName(self, "Select Reference Image", "", "NIFTI Files (*.nii *.nii.gz)")
         if not ref_image:
             return
             
-        # 选择源图像目录
+        # Select source image directory
         source_dir = QFileDialog.getExistingDirectory(self, "Select Directory with Source Images")
         if not source_dir:
             return
             
-        # 获取目录中的所有NIFTI文件
+        # Get all NIFTI files in the directory
         source_files = []
         for ext in ['*.nii', '*.nii.gz']:
             source_files.extend(glob.glob(os.path.join(source_dir, ext)))
@@ -886,81 +982,70 @@ class MainWindow(QMainWindow):
         self.log_widget.append_log(f"Found {len(source_files)} NIFTI files to coregister")
         self.log_widget.append_log(f"Reference image: {ref_image}")
         
-        # 选择协配参数
+        # Select cost function for coregistration
         cost_function = self._select_cost_function()
         
-        # 处理每个文件
-        success_count = 0
-        error_count = 0
-        
-        for i, source_file in enumerate(source_files):
-            try:
-                self.log_widget.append_log(f"Coregistering {i+1}/{len(source_files)}: {os.path.basename(source_file)}")
-                self.progress_manager.update_progress(f"Coregistering {os.path.basename(source_file)}", 
-                                                     int((i / len(source_files)) * 100))
-                                                     
-                success = self.matlab_engine.coregister_images(ref_image, source_file, cost_function)
-                
-                if success:
-                    success_count += 1
-                else:
-                    error_count += 1
-                    self.log_widget.append_log(f"Failed to coregister {source_file}", "ERROR")
-            except Exception as e:
-                error_count += 1
-                self.log_widget.append_log(f"Error coregistering {source_file}: {str(e)}", "ERROR")
-        
-        # 完成后的汇总信息
-        self.progress_manager.complete_operation(
-            f"Completed batch coregistration: {success_count} successful, {error_count} failed", 
-            error_count == 0
-        )
+        # Execute batch coregistration
+        try:
+            self.progress_manager.start_operation("Batch Coregistration")
+            results = self.matlab_engine.batch_coregister_images(ref_image, source_files, cost_function)
+            
+            # Display results
+            self.log_widget.append_log(f"Coregistration completed: {results['success']}/{results['total']} successful", 
+                                      "SUCCESS" if results['failed'] == 0 else "WARNING")
+            
+            if results['failed'] > 0:
+                self.log_widget.append_log(f"Failed to coregister {results['failed']} files:", "WARNING")
+                for failed_file in results['failed_files']:
+                    self.log_widget.append_log(f"  - {os.path.basename(failed_file)}", "WARNING")
+            
+            self.progress_manager.complete_operation(
+                f"Batch coregistration completed: {results['success']}/{results['total']} successful",
+                results['failed'] == 0
+            )
+        except Exception as e:
+            self.log_widget.append_log(f"Error during batch coregistration: {str(e)}", "ERROR")
+            self.progress_manager.complete_operation("Batch coregistration failed", False)
     
     def _select_cost_function(self):
-        """选择协配的代价函数"""
+        """Select cost function for coregistration"""
         options = ["Mutual Information", "Normalised Mutual Information", 
-                  "Entropy Correlation Coefficient", "Normalised Cross Correlation"]
+                   "Entropy Correlation Coefficient", "Normalised Cross Correlation"]
         cost_function, ok = QInputDialog.getItem(
             self, "Select Cost Function", "Cost Function:", options, 1, False
         )
         if ok and cost_function:
             return cost_function.lower().replace(' ', '_')
-        return "nmi"  # 默认返回标准化互信息
-    
+        return "nmi"  # Default to normalised mutual information
+
     @pyqtSlot()
     def batch_normalise_images(self):
-        """批量标准化图像 - 只处理文件夹中带r前缀的图像"""
+        """Batch normalize multiple images to a template"""
         self.log_widget.append_log("Batch normalizing images...")
         
-        # 选择模板图像
-        template_path, _ = QFileDialog.getOpenFileName(
-            self, "Select Template Image", "", "NIFTI Files (*.nii *.nii.gz)"
-        )
+        # Select template image
+        template_path, _ = QFileDialog.getOpenFileName(self, "Select Template Image", "", "NIFTI Files (*.nii *.nii.gz)")
         if not template_path:
             return
             
-        # 选择源图像目录
+        # Select source image directory
         source_dir = QFileDialog.getExistingDirectory(self, "Select Directory with Source Images")
         if not source_dir:
             return
             
-        # 获取目录中的所有带r前缀的NIFTI文件
+        # Get all NIFTI files in the directory - focusing on coregistered files ('r' prefix)
         source_files = []
         for ext in ['r*.nii', 'r*.nii.gz']:
             source_files.extend(glob.glob(os.path.join(source_dir, ext)))
             
         if not source_files:
-            self.log_widget.append_log("No coregistered files (with 'r' prefix) found in selected directory", "WARNING")
+            self.log_widget.append_log("No coregistered NIFTI files (with 'r' prefix) found in selected directory", "WARNING")
             return
             
-        self.log_widget.append_log(f"Found {len(source_files)} coregistered files to normalize")
+        self.log_widget.append_log(f"Found {len(source_files)} NIFTI files to normalize")
         self.log_widget.append_log(f"Template image: {template_path}")
         
-        # 处理每个文件
-        success_count = 0
-        error_count = 0
-        
-        # 构建基本参数
+        # Set parameters for normalization
         params = {
             'template_path': template_path,
             'source_smoothing': 8,
@@ -972,50 +1057,56 @@ class MainWindow(QMainWindow):
             'prefix': 'w'
         }
         
-        for i, source_file in enumerate(source_files):
-            try:
-                # 只处理以r开头的文件
-                filename = os.path.basename(source_file)
-                if not filename.startswith('r'):
-                    self.log_widget.append_log(f"Skipping non-coregistered file: {filename}", "INFO")
-                    continue
+        # Execute batch normalization
+        try:
+            self.progress_manager.start_operation("Batch Normalization")
+            
+            # Process each file separately since normalization requires specific parameters per file
+            success_count = 0
+            error_count = 0
+            
+            for i, source_file in enumerate(source_files):
+                try:
+                    # Update parameters for this file
+                    current_params = params.copy()
+                    current_params['source_image'] = source_file
                     
-                self.log_widget.append_log(f"Normalizing {i+1}/{len(source_files)}: {filename}")
-                self.progress_manager.update_progress(f"Normalizing {filename}", 
-                                                     int((i / len(source_files)) * 100))
-                                                     
-                # 更新源图像路径
-                current_params = params.copy()
-                current_params['source_image'] = source_file
-                
-                success = self.matlab_engine.normalize_image(current_params)
-                
-                if success:
-                    success_count += 1
-                else:
+                    self.log_widget.append_log(f"Normalizing {i+1}/{len(source_files)}: {os.path.basename(source_file)}")
+                    self.progress_manager.update_progress(f"Normalizing {os.path.basename(source_file)}", 
+                                                        int((i / len(source_files)) * 100))
+                    
+                    # Execute normalization
+                    success = self.matlab_engine.normalize_image(current_params)
+                    
+                    if success:
+                        success_count += 1
+                    else:
+                        error_count += 1
+                        self.log_widget.append_log(f"Failed to normalize {source_file}", "ERROR")
+                except Exception as e:
                     error_count += 1
-                    self.log_widget.append_log(f"Failed to normalize {source_file}", "ERROR")
-            except Exception as e:
-                error_count += 1
-                self.log_widget.append_log(f"Error normalizing {source_file}: {str(e)}", "ERROR")
-        
-        # 完成后的汇总信息
-        self.progress_manager.complete_operation(
-            f"Completed batch normalization: {success_count} successful, {error_count} failed", 
-            error_count == 0
-        )
-    
+                    self.log_widget.append_log(f"Error normalizing {source_file}: {str(e)}", "ERROR")
+            
+            # Complete operation
+            self.progress_manager.complete_operation(
+                f"Batch normalization completed: {success_count}/{len(source_files)} successful", 
+                error_count == 0
+            )
+        except Exception as e:
+            self.log_widget.append_log(f"Error during batch normalization: {str(e)}", "ERROR")
+            self.progress_manager.complete_operation("Batch normalization failed", False)
+
     @pyqtSlot()
     def batch_set_origin(self):
-        """批量设置图像原点"""
+        """Batch set origin for multiple images"""
         self.log_widget.append_log("Batch setting image origins...")
         
-        # 选择图像目录
+        # Select image directory
         image_dir = QFileDialog.getExistingDirectory(self, "Select Directory with Images")
         if not image_dir:
             return
             
-        # 获取目录中的所有NIFTI文件
+        # Get all NIFTI files in the directory
         image_files = []
         for ext in ['*.nii', '*.nii.gz']:
             image_files.extend(glob.glob(os.path.join(image_dir, ext)))
@@ -1026,45 +1117,52 @@ class MainWindow(QMainWindow):
             
         self.log_widget.append_log(f"Found {len(image_files)} NIFTI files to process")
         
-        # 获取坐标
+        # Get origin coordinates
         coordinates = self._get_origin_coordinates()
         if not coordinates:
             return
             
-        # 处理每个文件
-        success_count = 0
-        error_count = 0
-        
-        for i, image_file in enumerate(image_files):
-            try:
-                self.log_widget.append_log(f"Setting origin {i+1}/{len(image_files)}: {os.path.basename(image_file)}")
-                self.progress_manager.update_progress(f"Setting origin for {os.path.basename(image_file)}", 
-                                                     int((i / len(image_files)) * 100))
-                                                     
-                success = self.matlab_engine.set_origin(image_file, coordinates)
-                
-                if success:
-                    success_count += 1
-                else:
+        # Process files
+        try:
+            self.progress_manager.start_operation("Batch Set Origin")
+            
+            success_count = 0
+            error_count = 0
+            
+            for i, image_file in enumerate(image_files):
+                try:
+                    self.log_widget.append_log(f"Setting origin {i+1}/{len(image_files)}: {os.path.basename(image_file)}")
+                    self.progress_manager.update_progress(f"Setting origin for {os.path.basename(image_file)}", 
+                                                        int((i / len(image_files)) * 100))
+                    
+                    # Call set_origin method
+                    success = self.matlab_engine.set_origin(image_file, coordinates)
+                    
+                    if success:
+                        success_count += 1
+                    else:
+                        error_count += 1
+                        self.log_widget.append_log(f"Failed to set origin for {image_file}", "ERROR")
+                except Exception as e:
                     error_count += 1
-                    self.log_widget.append_log(f"Failed to set origin for {image_file}", "ERROR")
-            except Exception as e:
-                error_count += 1
-                self.log_widget.append_log(f"Error setting origin for {image_file}: {str(e)}", "ERROR")
-        
-        # 完成后的汇总信息
-        self.progress_manager.complete_operation(
-            f"Completed batch origin setting: {success_count} successful, {error_count} failed", 
-            error_count == 0
-        )
-    
+                    self.log_widget.append_log(f"Error setting origin for {image_file}: {str(e)}", "ERROR")
+            
+            # Complete operation
+            self.progress_manager.complete_operation(
+                f"Batch origin setting completed: {success_count}/{len(image_files)} successful", 
+                error_count == 0
+            )
+        except Exception as e:
+            self.log_widget.append_log(f"Error during batch origin setting: {str(e)}", "ERROR")
+            self.progress_manager.complete_operation("Batch origin setting failed", False)
+
     def _get_origin_coordinates(self):
-        """获取原点坐标"""
+        """Get origin coordinates from user"""
         dialog = QDialog(self)
         dialog.setWindowTitle("Set Origin Coordinates")
         layout = QVBoxLayout(dialog)
         
-        # 添加坐标输入
+        # Add coordinate inputs
         coord_layout = QGridLayout()
         coord_layout.addWidget(QLabel("X:"), 0, 0)
         coord_layout.addWidget(QLabel("Y:"), 1, 0)
@@ -1086,7 +1184,7 @@ class MainWindow(QMainWindow):
         
         layout.addLayout(coord_layout)
         
-        # 添加按钮
+        # Add buttons
         btn_layout = QHBoxLayout()
         ok_btn = QPushButton("OK")
         cancel_btn = QPushButton("Cancel")
@@ -1098,94 +1196,121 @@ class MainWindow(QMainWindow):
         
         layout.addLayout(btn_layout)
         
-        # 执行对话框
+        # Execute dialog
         if dialog.exec_():
             return [x_spin.value(), y_spin.value(), z_spin.value()]
         return None
-        
+
     @pyqtSlot()
-    def batch_convert_to_nifti(self):
-        """批量转换DICOM到NIFTI"""
+    def coregister_images(self):
+        """Coregister images using SPM"""
+        self.log_widget.append_log("Opening coregistration dialog...")
+        
+        # Create and show the coregistration dialog
         try:
-            # 选择包含多个DICOM目录的父目录
-            parent_dir = QFileDialog.getExistingDirectory(
-                self, 
-                "Select Parent Directory Containing Multiple DICOM Folders",
-                "",
-                QFileDialog.ShowDirsOnly
-            )
-            if not parent_dir:
-                return
-
-            # 选择输出目录
-            output_dir = QFileDialog.getExistingDirectory(
-                self, 
-                "Select Output Directory",
-                "",
-                QFileDialog.ShowDirsOnly
-            )
-            if not output_dir:
-                return
-
-            # 获取所有子目录
-            dicom_dirs = [d for d in os.listdir(parent_dir) 
-                         if os.path.isdir(os.path.join(parent_dir, d))]
+            # Import dialog here to prevent circular imports
+            from mispmsrc.ui.coreg_dialog import CoregisterDialog
             
-            if not dicom_dirs:
-                self.log_widget.append_log(f"No subdirectories found in {parent_dir}", "WARNING")
-                return
+            dialog = CoregisterDialog(self)
+            
+            # Show the dialog and handle the result
+            if dialog.exec_():
+                # Get the parameters from the dialog
+                params = dialog.get_parameters()
                 
-            self.log_widget.append_log(f"Found {len(dicom_dirs)} subdirectories to process")
-            
-            # 处理每个子目录
-            success_count = 0
-            error_count = 0
-            
-            for i, dicom_dir_name in enumerate(dicom_dirs):
-                dicom_dir = os.path.join(parent_dir, dicom_dir_name)
-                subject_output_dir = os.path.join(output_dir, dicom_dir_name)
-                
-                try:
-                    # 创建输出子目录
-                    os.makedirs(subject_output_dir, exist_ok=True)
-                    
-                    self.log_widget.append_log(f"Converting {i+1}/{len(dicom_dirs)}: {dicom_dir_name}")
-                    self.progress_manager.update_progress(
-                        f"Converting {dicom_dir_name}", 
-                        int((i / len(dicom_dirs)) * 100)
+                # Double-check if parameters are valid
+                if not params.get('reference') or not params.get('source'):
+                    self.log_widget.append_log("Reference or source image not selected", "ERROR")
+                    QMessageBox.warning(
+                        self, 
+                        "Missing Parameters", 
+                        "Reference and source images are required for coregistration."
                     )
+                    return
                     
-                    # 执行转换
-                    result_files = self.matlab_engine.convert_to_nifti(dicom_dir, subject_output_dir)
+                # Show progress information
+                self.log_widget.append_log(f"Coregistering {os.path.basename(params['source'])} to "
+                                         f"{os.path.basename(params['reference'])}")
+                
+                # Call the MATLAB engine to perform coregistration
+                self.progress_manager.start_operation("Coregistration")
+                self.progress_manager.update_progress("Setting up coregistration...", 10)
+                
+                success = self.matlab_engine.coregister_images(
+                    params['reference'], 
+                    params['source'],
+                    params.get('cost_function', 'nmi')
+                )
+                
+                if success:
+                    self.log_widget.append_log("Coregistration completed successfully", "SUCCESS")
+                    self.progress_manager.complete_operation("Coregistration completed successfully", True)
+                else:
+                    self.log_widget.append_log("Coregistration failed", "ERROR")
+                    self.progress_manager.complete_operation("Coregistration failed", False)
                     
-                    if result_files:
-                        success_count += 1
-                        self.log_widget.append_log(
-                            f"Successfully converted {len(result_files)} files from {dicom_dir_name}"
-                        )
-                    else:
-                        error_count += 1
-                        self.log_widget.append_log(f"No files were converted from {dicom_dir_name}", "WARNING")
-                        
-                except Exception as e:
-                    error_count += 1
-                    self.log_widget.append_log(f"Error converting {dicom_dir_name}: {str(e)}", "ERROR")
-            
-            # 完成报告
-            self.progress_manager.complete_operation(
-                f"Completed batch conversion: {success_count} successful, {error_count} failed",
-                error_count == 0
-            )
-            
+            else:
+                self.log_widget.append_log("Coregistration cancelled", "INFO")
+                
         except Exception as e:
-            self.log_widget.append_log(f"Error during batch conversion: {str(e)}", "ERROR")
-            self.progress_bar.setVisible(False)
+            self.log_widget.append_log(f"Error in coregistration: {str(e)}", "ERROR")
+            import traceback
+            self.logger.error(traceback.format_exc())
+
+    @pyqtSlot()
+    def normalise_image(self):
+        """Normalize an image to a template using SPM"""
+        self.log_widget.append_log("Opening normalization dialog...")
+        
+        try:
+            # Import dialog here to prevent circular imports
+            from mispmsrc.ui.normalize_dialog import NormalizeDialog
+            
+            dialog = NormalizeDialog(self)
+            
+            # Show the dialog and handle the result
+            if dialog.exec_():
+                # Get the parameters from the dialog
+                params = dialog.get_parameters()
+                
+                # Check if parameters are valid
+                if not params.get('source_image') or not params.get('template_path'):
+                    self.log_widget.append_log("Source image or template not selected", "ERROR")
+                    return
+                    
+                # Show progress information
+                self.log_widget.append_log(f"Normalizing {os.path.basename(params['source_image'])} to "
+                                        f"{os.path.basename(params['template_path'])}")
+                
+                # Call the MATLAB engine to perform normalization
+                success = self.matlab_engine.normalize_image(params)
+                
+                if success:
+                    self.log_widget.append_log("Normalization completed successfully", "SUCCESS")
+                    
+                    # Show the output file information
+                    output_dir = os.path.dirname(params['source_image'])
+                    prefix = params.get('prefix', 'w')
+                    source_name = os.path.basename(params['source_image'])
+                    output_path = os.path.join(output_dir, f"{prefix}{source_name}")
+                    
+                    if os.path.exists(output_path):
+                        self.log_widget.append_log(f"Created normalized file: {output_path}", "SUCCESS")
+                    
+                else:
+                    self.log_widget.append_log("Normalization failed", "ERROR")
+                    
+            else:
+                self.log_widget.append_log("Normalization cancelled", "INFO")
+                
+        except Exception as e:
+            self.log_widget.append_log(f"Error in normalization: {str(e)}", "ERROR")
+            import traceback
+            self.logger.error(traceback.format_exc())
 
 if __name__ == '__main__':
     import sys
     app = QApplication(sys.argv)
-    
-    # Set application style
     app.setStyle('Fusion')
     
     # Create and show main window

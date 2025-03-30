@@ -3,7 +3,7 @@ import logging
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QLineEdit, QGroupBox, QComboBox, QFileDialog, QSpinBox,
-    QDoubleSpinBox, QCheckBox, QGridLayout, QMessageBox
+    QDoubleSpinBox, QCheckBox, QGridLayout, QMessageBox, QFormLayout
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 from .bounding_box_dialog import BoundingBoxDialog  # 添加到文件顶部的导入部分
@@ -18,6 +18,20 @@ class NormalizeDialog(QDialog):
         self.logger = logging.getLogger(__name__)  # Add logger initialization
         self.setWindowTitle("Normalise: Estimate & Write")
         self.setMinimumWidth(700)
+        
+        # Store parameters
+        self.source_image = None
+        self.template_path = None
+        self.params = {
+            'source_smoothing': 8,
+            'template_smoothing': 0,
+            'nonlinear_cutoff': 25,
+            'nonlinear_iterations': 16,
+            'nonlinear_reg': 1,
+            'preserve': 0,
+            'prefix': 'w'
+        }
+        
         self.setup_ui()
         
     def setup_ui(self):
@@ -78,14 +92,16 @@ class NormalizeDialog(QDialog):
         # Source Image Smoothing
         self.source_smooth = QSpinBox()
         self.source_smooth.setRange(0, 32)
-        self.source_smooth.setValue(8)
+        self.source_smooth.setValue(self.params['source_smoothing'])
+        self.source_smooth.valueChanged.connect(lambda v: self.update_param('source_smoothing', v))
         estimate_layout.addWidget(QLabel("Source Image Smoothing (mm FWHM):"), 2, 0)
         estimate_layout.addWidget(self.source_smooth, 2, 1)
         
         # Template Image Smoothing
         self.template_smooth = QSpinBox()
         self.template_smooth.setRange(0, 32)
-        self.template_smooth.setValue(0)
+        self.template_smooth.setValue(self.params['template_smoothing'])
+        self.template_smooth.valueChanged.connect(lambda v: self.update_param('template_smoothing', v))
         estimate_layout.addWidget(QLabel("Template Image Smoothing (mm FWHM):"), 3, 0)
         estimate_layout.addWidget(self.template_smooth, 3, 1)
         
@@ -98,22 +114,25 @@ class NormalizeDialog(QDialog):
         # Nonlinear Frequency Cutoff
         self.cutoff = QSpinBox()
         self.cutoff.setRange(0, 50)
-        self.cutoff.setValue(25)
+        self.cutoff.setValue(self.params['nonlinear_cutoff'])
+        self.cutoff.valueChanged.connect(lambda v: self.update_param('nonlinear_cutoff', v))
         estimate_layout.addWidget(QLabel("Nonlinear Frequency Cutoff:"), 5, 0)
         estimate_layout.addWidget(self.cutoff, 5, 1)
         
         # Nonlinear Iterations
         self.iterations = QSpinBox()
         self.iterations.setRange(0, 32)
-        self.iterations.setValue(16)
+        self.iterations.setValue(self.params['nonlinear_iterations'])
+        self.iterations.valueChanged.connect(lambda v: self.update_param('nonlinear_iterations', v))
         estimate_layout.addWidget(QLabel("Nonlinear Iterations:"), 6, 0)
         estimate_layout.addWidget(self.iterations, 6, 1)
         
         # Nonlinear Regularization
         self.nonlinear_reg = QDoubleSpinBox()
         self.nonlinear_reg.setRange(0, 10)
-        self.nonlinear_reg.setValue(1)
+        self.nonlinear_reg.setValue(self.params['nonlinear_reg'])
         self.nonlinear_reg.setSingleStep(0.1)
+        self.nonlinear_reg.valueChanged.connect(lambda v: self.update_param('nonlinear_reg', v))
         estimate_layout.addWidget(QLabel("Nonlinear Regularization:"), 7, 0)
         estimate_layout.addWidget(self.nonlinear_reg, 7, 1)
         
@@ -127,6 +146,8 @@ class NormalizeDialog(QDialog):
         # Preserve
         self.preserve = QComboBox()
         self.preserve.addItems(['Preserve Concentrations', 'Preserve Amount'])
+        self.preserve.setCurrentIndex(self.params['preserve'])
+        self.preserve.currentIndexChanged.connect(lambda i: self.update_param('preserve', i))
         write_layout.addWidget(QLabel("Preserve:"), 0, 0)
         write_layout.addWidget(self.preserve, 0, 1)
         
@@ -182,7 +203,9 @@ class NormalizeDialog(QDialog):
         write_layout.addLayout(wrap_layout, 4, 1)
         
         # Filename Prefix
-        self.prefix_edit = QLineEdit("w")
+        self.prefix_edit = QLineEdit(self.params['prefix'])
+        self.prefix_edit.setMaxLength(4)
+        self.prefix_edit.textChanged.connect(lambda t: self.update_param('prefix', t))
         write_layout.addWidget(QLabel("Filename Prefix:"), 5, 0)
         write_layout.addWidget(self.prefix_edit, 5, 1)
         
@@ -253,17 +276,7 @@ class NormalizeDialog(QDialog):
             if not os.path.exists(template):
                 raise ValueError(f"Template image not found: {template}")
                 
-            params = {
-                'source_image': source_image,
-                'template_path': template,  # Using template_path consistently
-                'source_smoothing': self.source_smooth.value(),
-                'template_smoothing': self.template_smooth.value(),
-                'nonlinear_cutoff': self.cutoff.value(),
-                'nonlinear_iterations': self.iterations.value(),
-                'nonlinear_reg': self.nonlinear_reg.value(),
-                'preserve': self.preserve.currentIndex(),
-                'prefix': self.prefix_edit.text() or 'w'
-            }
+            params = self.get_parameters()
             
             if self.bb_custom.isChecked():
                 params['bounding_box'] = self.current_bb
@@ -277,3 +290,18 @@ class NormalizeDialog(QDialog):
                 "Parameter Error",
                 f"Invalid parameters: {str(e)}\n\nPlease check your inputs."
             )
+    
+    def update_param(self, param, value):
+        """Update a parameter value"""
+        self.params[param] = value
+    
+    def get_parameters(self):
+        """Get the normalization parameters selected by the user
+        
+        Returns:
+            dict: Dictionary containing the selected parameters
+        """
+        params = self.params.copy()
+        params['source_image'] = self.source_edit.text()
+        params['template_path'] = self.template_edit.text()
+        return params
