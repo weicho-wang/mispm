@@ -937,12 +937,105 @@ class MatlabEngine(QObject):
             
             # Direct approach using eval and string formatting
             files_str = "'" + "','".join(matlab_paths) + "'"
-            matlab_cmd = f"spm_check_registration({files_str});"
             
             self.operation_progress.emit("Preparing to display images...", 50)
             
-            # Call SPM check registration with the formatted string
-            self._engine.eval(matlab_cmd, nargout=0)
+            # 先检查每个文件，判断哪些可能是PET图像
+            self._engine.eval("""
+            % Pre-scan files to identify PET images
+            pet_indices = [];
+            all_files = {""" + files_str + """};
+            for i = 1:numel(all_files)
+                try
+                    vol = spm_vol(all_files{i});
+                    data = spm_read_vols(vol);
+                    
+                    % 检查可能是PET图像的特征：
+                    % 1. 最大值明显大于均值
+                    % 2. 值都为正（SUV/计数）
+                    % 3. 含有"PET", "PiB", "FDG"等关键词
+                    
+                    max_val = max(data(:));
+                    mean_val = mean(data(data > 0));
+                    is_positive = min(data(:)) >= 0;
+                    max_mean_ratio = max_val / (mean_val + eps);
+                    name_lower = lower(all_files{i});
+                    
+                    % 测试打印信息，帮助调试
+                    fprintf('File %d: %s, max=%.2f, mean=%.2f, ratio=%.2f\\n', ...
+                            i, all_files{i}, max_val, mean_val, max_mean_ratio);
+                    
+                    % 检查名称中是否有PET相关关键词
+                    is_pet_name = contains(name_lower, 'pet') || contains(name_lower, 'pib') || ...
+                                 contains(name_lower, 'fdg') || contains(name_lower, 'suvr');
+                                 
+                    % 典型的PET图像特征
+                    if ((max_mean_ratio > 10 && is_positive) || is_pet_name)
+                        pet_indices = [pet_indices, i];
+                        fprintf('File %d identified as PET image\\n', i);
+                    end
+                catch
+                    fprintf('Error analyzing file %d: %s\\n', i, all_files{i});
+                end
+            end
+            """, nargout=0)
+            
+            # 正常调用check_registration
+            self._engine.eval(f"spm_check_registration({files_str});", nargout=0)
+            
+            # 使用增强的PET显示调整
+            self._engine.eval("""
+            % 获取SPM显示状态
+            global st;
+            
+            % 确保st存在且有体积数据
+            if exist('st', 'var') && isfield(st, 'vols') && ~isempty(st.vols)
+                try
+                    % 针对每个被识别为PET的图像设置增强显示
+                    for i = 1:numel(pet_indices)
+                        pet_idx = pet_indices(i);
+                        
+                        if pet_idx <= numel(st.vols) && ~isempty(st.vols{pet_idx})
+                            fprintf('Enhancing display for PET volume %d\\n', pet_idx);
+                            
+                            % 获取体素数据
+                            vol_data = spm_read_vols(st.vols{pet_idx});
+                            
+                            % 使用更激进的阈值裁剪获取更好的显示范围
+                            sorted_vals = sort(vol_data(vol_data > 0));
+                            
+                            if ~isempty(sorted_vals)
+                                % 使用1%和85%分位数以提高对比度
+                                lower_pct = max(1, round(length(sorted_vals)*0.01));
+                                upper_pct = min(length(sorted_vals), round(length(sorted_vals)*0.85));
+                                
+                                low_val = sorted_vals[lower_pct];
+                                high_val = sorted_vals[upper_pct];
+                                
+                                % 设置更合适的显示窗口
+                                st.vols{pet_idx}.window = [low_val high_val];
+                                st.vols{pet_idx}.mapping = 'linear';
+                                
+                                % 可选：使用热色调更好地展示PET图像
+                                st.vols{pet_idx}.cmap = hot(256);
+                                
+                                fprintf('Display range set to [%.2f, %.2f] for volume %d\\n', low_val, high_val, pet_idx);
+                            else
+                                fprintf('No positive values found in volume %d\\n', pet_idx);
+                            end
+                        end
+                    end
+                    
+                    % 重绘显示
+                    spm_orthviews('Redraw');
+                    fprintf('Display enhancement complete\\n');
+                catch ME
+                    fprintf('Error enhancing display: %s\\n', ME.message);
+                end
+            else
+                fprintf('SPM display state not properly initialized\\n');
+            end
+            """, nargout=0)
             
             self.operation_progress.emit("Registration check display initialized", 100)
             self.operation_completed.emit("Registration check complete", True)

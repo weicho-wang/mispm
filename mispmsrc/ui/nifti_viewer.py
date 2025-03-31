@@ -83,31 +83,72 @@ class SliceCanvas(FigureCanvas):
             if np.isnan(slice_data).any() or np.isinf(slice_data).any():
                 slice_data = np.nan_to_num(slice_data)
             
-            # Calculate data range for better display
-            try:
-                valid_data = slice_data[~np.isnan(slice_data) & ~np.isinf(slice_data)]
-                if len(valid_data) > 0:
-                    vmin, vmax = np.percentile(valid_data, (1, 99))
+            # 检测是否为PET图像（基于数据特征）
+            is_pet = False
+            max_val = np.max(slice_data)
+            mean_val = np.mean(slice_data[slice_data > 0]) if np.any(slice_data > 0) else 0
+            max_mean_ratio = max_val / (mean_val + 1e-10)  # 避免除零
+            min_val = np.min(slice_data)
+            
+            # PET图像通常有较高的最大值/均值比率，且大多是正值
+            if max_mean_ratio > 5 and min_val >= 0:
+                is_pet = True
+            # 如果图像文件名中包含PET相关关键词
+            elif hasattr(self, 'image_file') and self.image_file:
+                image_name = os.path.basename(self.image_file).lower()
+                pet_keywords = ['pet', 'pib', 'fdg', 'suvr', 'tau']
+                if any(keyword in image_name for keyword in pet_keywords):
+                    is_pet = True
+            
+            # 为PET和MRI图像选择不同的处理方式
+            if is_pet:
+                # PET图像需要更激进的对比度调整和特殊的colormap
+                # 使用更低的下限和更高的上限百分位数
+                lower_pct = 1
+                upper_pct = 85
+                
+                # 确保有足够的有效值进行百分位数计算
+                valid_data = slice_data[slice_data > 0]
+                if len(valid_data) > 10:
+                    vmin = np.percentile(valid_data, lower_pct)
+                    vmax = np.percentile(valid_data, upper_pct)
+                    
+                    # 使用类似"hot"的colormap，更适合PET图像
+                    self.axes.imshow(slice_data, cmap='hot', aspect='equal', vmin=vmin, vmax=vmax)
+                    
+                    # 使用白色十字线以在热色图上更清晰
+                    crosshair_color = 'white'
                 else:
-                    vmin, vmax = 0, 1
-            except Exception:
-                vmin, vmax = np.nanmin(slice_data), np.nanmax(slice_data)
-                if np.isinf(vmin) or np.isinf(vmax):
-                    vmin, vmax = 0, 1
+                    # 如果有效值太少，退回到基本灰度显示
+                    self.axes.imshow(slice_data, cmap='gray', aspect='equal')
+                    crosshair_color = 'yellow'
+            else:
+                # MRI图像使用常规灰度显示和更适中的对比度调整
+                try:
+                    valid_data = slice_data[~np.isnan(slice_data) & ~np.isinf(slice_data)]
+                    if len(valid_data) > 0:
+                        vmin, vmax = np.percentile(valid_data, (1, 99))
+                    else:
+                        vmin, vmax = 0, 1
+                except Exception:
+                    vmin, vmax = np.nanmin(slice_data), np.nanmax(slice_data)
+                    if np.isinf(vmin) or np.isinf(vmax):
+                        vmin, vmax = 0, 1
+                
+                # 使用gray colormap显示MRI图像
+                self.axes.imshow(slice_data, cmap='gray', aspect='equal', vmin=vmin, vmax=vmax)
+                crosshair_color = 'yellow'
             
-            # Display the slice
-            self.axes.imshow(slice_data, cmap='gray', aspect='equal', vmin=vmin, vmax=vmax)
+            # 绘制十字线
+            self.axes.axhline(y=crosshair_y, color=crosshair_color, linestyle='-', alpha=0.7)
+            self.axes.axvline(x=crosshair_x, color=crosshair_color, linestyle='-', alpha=0.7)
             
-            # Draw crosshair
-            self.axes.axhline(y=crosshair_y, color='r', linestyle='-', alpha=0.5)
-            self.axes.axvline(x=crosshair_x, color='r', linestyle='-', alpha=0.5)
-            
-            # Add slice number as text
+            # 添加切片号显示
             self.axes.text(0.02, 0.98, f"Slice: {self.current_slice}", 
                           transform=self.axes.transAxes, 
                           color='white', fontsize=8,
                           verticalalignment='top',
-                          bbox=dict(boxstyle='round', facecolor='black', alpha=0.5))
+                          bbox=dict(boxstyle='round', facecolor='black', alpha=0.7))
             
             self.axes.set_axis_off()
             self.draw()
@@ -220,14 +261,66 @@ class NiftiViewer(QDialog):
             
             self.setup_ui()
             
+            # 设置绘图区域的暗色主题
+            self.setup_dark_figure_style()
+            
             # 作为独立窗口时设置窗口属性，确保始终在顶部显示
             if parent is None or isinstance(parent, QMainWindow):
                 self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
+                
+                # 如果是独立窗口且未继承父窗口样式，应用暗色主题
+                if not self.styleSheet():
+                    from PyQt5.QtWidgets import QApplication
+                    if QApplication.instance().styleSheet():
+                        self.setStyleSheet(QApplication.instance().styleSheet())
+                    else:
+                        # 设置基本的黑色主题样式
+                        self.setStyleSheet("""
+                        QDialog, QWidget {
+                            background-color: #2D2D30;
+                            color: #CCCCCC;
+                        }
+                        QPushButton {
+                            background-color: #3F3F46;
+                            color: #CCCCCC;
+                            border: 1px solid #555555;
+                            border-radius: 3px;
+                            padding: 5px;
+                        }
+                        QLabel {
+                            color: #CCCCCC;
+                        }
+                        QSlider {
+                            background-color: #2D2D30;
+                        }
+                        QSpinBox, QDoubleSpinBox {
+                            background-color: #1E1E1E;
+                            color: #CCCCCC;
+                            border: 1px solid #3F3F46;
+                        }
+                        QGroupBox {
+                            border: 1px solid #3F3F46;
+                            color: #CCCCCC;
+                        }
+                        """)
         except Exception as e:
             import traceback
             print(f"Error initializing NiftiViewer: {str(e)}")
             print(traceback.format_exc())
             raise
+    
+    def setup_dark_figure_style(self):
+        """设置matplotlib图形的暗色风格"""
+        import matplotlib.pyplot as plt
+        
+        # 设置matplotlib的样式为dark_background
+        plt.style.use('dark_background')
+        
+        # 为每个画布设置黑色背景
+        for canvas in [self.axial_canvas, self.coronal_canvas, self.sagittal_canvas]:
+            canvas.fig.patch.set_facecolor('#2D2D30')
+            canvas.axes.set_facecolor('#1E1E1E')
+            canvas.draw_idle()  # 重绘画布
     
     # 方法接受，允许以嵌入方式使用（不自动显示）
     def exec_(self):

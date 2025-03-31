@@ -36,6 +36,44 @@ def view_nifti(file_path=None):
     """打开并查看NIFTI文件"""
     app = QApplication([])
     
+    # 设置黑色主题样式
+    dark_style = """
+    QMainWindow, QDialog {
+        background-color: #2D2D30;
+        color: #CCCCCC;
+    }
+    QWidget {
+        background-color: #2D2D30;
+        color: #CCCCCC;
+    }
+    QPushButton {
+        background-color: #3F3F46;
+        color: #CCCCCC;
+        border: 1px solid #555555;
+        border-radius: 3px;
+        padding: 5px;
+    }
+    QPushButton:hover {
+        background-color: #505056;
+    }
+    QLabel {
+        color: #CCCCCC;
+    }
+    QSlider {
+        background-color: #2D2D30;
+    }
+    QGroupBox {
+        border: 1px solid #3F3F46;
+        color: #CCCCCC;
+    }
+    QSpinBox, QDoubleSpinBox {
+        background-color: #1E1E1E;
+        color: #CCCCCC;
+        border: 1px solid #3F3F46;
+    }
+    """
+    app.setStyleSheet(dark_style)
+    
     # 如果没有提供文件路径，则打开文件选择对话框
     if not file_path:
         file_path, _ = QFileDialog.getOpenFileName(

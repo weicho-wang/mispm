@@ -43,13 +43,13 @@ class LogWidget(QTextEdit):
             message: Log message to append
             level: Log level (INFO, WARNING, ERROR)
         """
-        color = "black"
+        color = "white"  # 将默认颜色从"black"改为"white"
         if level == "WARNING":
             color = "orange"
         elif level == "ERROR":
             color = "red"
         elif level == "SUCCESS":
-            color = "green"
+            color = "lightgreen"  # 将成功信息的颜色调整为更亮的绿色
             
         self.append(f'<span style="color:{color};">{message}</span>')
 
@@ -72,6 +72,9 @@ class MainWindow(QMainWindow):
         # Set up UI
         self.run_script_btn = QPushButton("LC Analysis")
         self.setup_ui()
+        
+        # 设置黑色主题样式
+        self.setup_dark_theme()
         
         # Connect signals
         self.connect_signals()
@@ -234,6 +237,159 @@ class MainWindow(QMainWindow):
         for btn in all_buttons:
             btn.setFixedHeight(25)
             btn.setFixedWidth(120)
+    
+    def setup_dark_theme(self):
+        """设置黑色主题样式"""
+        # 定义黑色主题样式
+        dark_style = """
+        QMainWindow, QDialog {
+            background-color: #2D2D30;
+            color: #CCCCCC;
+        }
+        QWidget {
+            background-color: #2D2D30;
+            color: #CCCCCC;
+        }
+        QGroupBox {
+            border: 1px solid #3F3F46;
+            border-radius: 4px;
+            margin-top: 8px;
+            font-weight: bold;
+        }
+        QGroupBox::title {
+            subcontrol-origin: margin;
+            left: 10px;
+            padding: 0 3px;
+        }
+        QPushButton {
+            background-color: #3F3F46;
+            color: #CCCCCC;
+            border: 1px solid #555555;
+            border-radius: 3px;
+            padding: 5px;
+        }
+        QPushButton:hover {
+            background-color: #505056;
+        }
+        QPushButton:pressed {
+            background-color: #4080C0;
+        }
+        QPushButton:disabled {
+            background-color: #2D2D30;
+            color: #666666;
+            border: 1px solid #3F3F46;
+        }
+        QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {
+            background-color: #1E1E1E;
+            color: #CCCCCC;
+            border: 1px solid #3F3F46;
+            border-radius: 2px;
+            padding: 2px;
+        }
+        QComboBox::drop-down {
+            border: none;
+            width: 20px;
+        }
+        QComboBox QAbstractItemView {
+            background-color: #1E1E1E;
+            selection-background-color: #3F3F46;
+        }
+        QTextEdit, QListView {
+            background-color: #1E1E1E;
+            color: #CCCCCC;
+            border: 1px solid #3F3F46;
+        }
+        QMenuBar {
+            background-color: #2D2D30;
+            color: #CCCCCC;
+        }
+        QMenuBar::item:selected {
+            background-color: #3F3F46;
+        }
+        QMenu {
+            background-color: #2D2D30;
+            color: #CCCCCC;
+        }
+        QMenu::item:selected {
+            background-color: #3F3F46;
+        }
+        QLabel {
+            color: #CCCCCC;
+        }
+        QStatusBar {
+            background-color: #1E1E1E;
+            color: #CCCCCC;
+        }
+        QProgressBar {
+            border: 1px solid #3F3F46;
+            border-radius: 2px;
+            background-color: #1E1E1E;
+            text-align: center;
+            color: #CCCCCC;
+        }
+        QProgressBar::chunk {
+            background-color: #4080C0;
+        }
+        QTabWidget::pane {
+            border: 1px solid #3F3F46;
+        }
+        QTabBar::tab {
+            background-color: #2D2D30;
+            color: #CCCCCC;
+            border: 1px solid #3F3F46;
+            border-bottom: none;
+            padding: 5px 10px;
+        }
+        QTabBar::tab:selected {
+            background-color: #3F3F46;
+        }
+        QScrollBar:vertical {
+            border: none;
+            background-color: #2D2D30;
+            width: 12px;
+            margin: 12px 0 12px 0;
+        }
+        QScrollBar::handle:vertical {
+            background-color: #3F3F46;
+            min-height: 20px;
+            border-radius: 3px;
+        }
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+            border: none;
+            background: none;
+            height: 12px;
+        }
+        QScrollBar:horizontal {
+            border: none;
+            background-color: #2D2D30;
+            height: 12px;
+            margin: 0 12px 0 12px;
+        }
+        QScrollBar::handle:horizontal {
+            background-color: #3F3F46;
+            min-width: 20px;
+            border-radius: 3px;
+        }
+        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+            border: none;
+            background: none;
+            width: 12px;
+        }
+        """
+        # 应用样式表到应用程序
+        QApplication.instance().setStyleSheet(dark_style)
+        self.setStyleSheet(dark_style)
+        
+        # 将样式应用到LogWidget - 修改文本颜色为白色
+        self.log_widget.setStyleSheet("""
+        QTextEdit {
+            background-color: #1E1E1E;
+            color: white;  /* 修改默认文本颜色为白色 */
+            border: 1px solid #3F3F46;
+            font-family: Consolas, Monospace;
+            font-size: 9pt;
+        }
+        """)
     
     def connect_signals(self):
         """Connect UI signals to slots"""
@@ -619,13 +775,44 @@ class MainWindow(QMainWindow):
     
     @pyqtSlot()
     def check_registration(self):
-        """Check registration of images"""
-        self.log_widget.append_log("Checking registration of images...")
+        """Check registration of images using a dialog interface"""
+        self.log_widget.append_log("Opening registration check dialog...")
         
-        file_paths, _ = QFileDialog.getOpenFileNames(self, "Select NIFTI Files", "", "NIFTI Files (*.nii *.nii.gz)")
-        if file_paths:
-            self.log_widget.append_log(f"Selected NIFTI files: {', '.join(file_paths)}")
-            self.matlab_engine.check_registration(file_paths)
+        try:
+            # Import dialog here to prevent circular imports
+            from mispmsrc.ui.check_reg_dialog import CheckRegDialog
+            
+            dialog = CheckRegDialog(self)
+            dialog.setStyleSheet(QApplication.instance().styleSheet())
+            
+            # Connect the signal from dialog to our handler
+            dialog.check_started.connect(self._perform_registration_check)
+            
+            # Show the dialog
+            if dialog.exec_() == QDialog.Rejected:
+                self.log_widget.append_log("Registration check cancelled", "INFO")
+        except Exception as e:
+            self.log_widget.append_log(f"Error opening registration check dialog: {str(e)}", "ERROR")
+            import traceback
+            self.logger.error(traceback.format_exc())
+
+    def _perform_registration_check(self, file_paths):
+        """Execute the actual registration check with the selected files
+        
+        Args:
+            file_paths: List of file paths to check
+        """
+        try:
+            if file_paths:
+                self.log_widget.append_log(f"Selected {len(file_paths)} NIFTI files for registration check")
+                self.log_widget.append_log(f"Files: {', '.join([os.path.basename(f) for f in file_paths])}")
+                
+                # Call MATLAB engine to check registration
+                self.matlab_engine.check_registration(file_paths)
+        except Exception as e:
+            self.log_widget.append_log(f"Error checking registration: {str(e)}", "ERROR")
+            import traceback
+            self.logger.error(traceback.format_exc())
     
     @pyqtSlot()
     def show_cl_analysis_dialog(self):
@@ -638,6 +825,7 @@ class MainWindow(QMainWindow):
             
             # Initialize dialog with properly configured logger
             dialog = CLAnalysisDialog(self)
+            dialog.setStyleSheet(QApplication.instance().styleSheet())
             
             # Connect the signal
             dialog.analysis_started.connect(self.run_cl_analysis)
@@ -1160,6 +1348,7 @@ class MainWindow(QMainWindow):
         """Get origin coordinates from user"""
         dialog = QDialog(self)
         dialog.setWindowTitle("Set Origin Coordinates")
+        dialog.setStyleSheet(QApplication.instance().styleSheet())
         layout = QVBoxLayout(dialog)
         
         # Add coordinate inputs
@@ -1212,6 +1401,7 @@ class MainWindow(QMainWindow):
             from mispmsrc.ui.coreg_dialog import CoregisterDialog
             
             dialog = CoregisterDialog(self)
+            dialog.setStyleSheet(QApplication.instance().styleSheet())
             
             # Show the dialog and handle the result
             if dialog.exec_():
@@ -1267,6 +1457,7 @@ class MainWindow(QMainWindow):
             from mispmsrc.ui.normalize_dialog import NormalizeDialog
             
             dialog = NormalizeDialog(self)
+            dialog.setStyleSheet(QApplication.instance().styleSheet())
             
             # Show the dialog and handle the result
             if dialog.exec_():
@@ -1311,7 +1502,7 @@ class MainWindow(QMainWindow):
 if __name__ == '__main__':
     import sys
     app = QApplication(sys.argv)
-    app.setStyle('Fusion')
+    app.setStyle('Fusion')  # 保留 Fusion 风格，只改变颜色
     
     # Create and show main window
     window = MainWindow()
