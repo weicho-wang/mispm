@@ -8,9 +8,9 @@ import glob
 import logging
 
 class CLAnalysisDialog(QDialog):
-    """CL分析参数选择对话框"""
+    """CL Analysis Parameters Selection Dialog"""
     
-    analysis_started = pyqtSignal(dict)  # 发送分析参数的信号
+    analysis_started = pyqtSignal(dict)  # send signal of analysis parameters
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -23,7 +23,7 @@ class CLAnalysisDialog(QDialog):
     def setup_ui(self):
         layout = QVBoxLayout(self)
         
-        # 文件选择组
+        # file selection group
         files_group = QGroupBox("File Selection")
         files_layout = QVBoxLayout()
         
@@ -114,16 +114,16 @@ class CLAnalysisDialog(QDialog):
         layout.addLayout(btn_layout)
     
     def _browse_file(self, line_edit, title, filter="NIFTI files (*.nii);;All files (*.*)"):
-        """浏览并选择文件"""
+        """view and select a file"""
         filename, _ = QFileDialog.getOpenFileName(self, title, "", filter)
         if filename:
             line_edit.setText(filename)
     
     def _browse_dir(self, line_edit, title):
-        """浏览并选择目录，并验证目录中是否有w开头的文件"""
+        """ view and select a directory, and verify if it contains files with 'w' prefix"""
         dirname = QFileDialog.getExistingDirectory(self, title)
         if dirname:
-            # 检查是否有w开头的归一化文件
+            # check whether contain normalized files with 'w' prefix
             has_norm_files = False
             norm_file_count = 0
             for pattern in ['w*.nii', 'w*.nii.gz', 'wr*.nii', 'wr*.nii.gz']:
@@ -162,7 +162,7 @@ class CLAnalysisDialog(QDialog):
                 self.logger.warning(f"Directory name does not contain expected group indicators (AD/YC): {dirname}")
 
     def _run_analysis(self):
-        """收集参数并启动分析"""
+        """collect parameters and start analysis"""
         params = {
             'ref_path': self.ref_edit.text(),
             'roi_path': self.roi_edit.text(),

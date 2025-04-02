@@ -7,26 +7,26 @@ from PyQt5.QtGui import QValidator  # Add this import
 import math
 
 class CustomDoubleSpinBox(QDoubleSpinBox):
-    """支持NaN输入的自定义SpinBox"""
+    """selfdefine SpinBox Calss whcih support NaN input"""
     
     def __init__(self, parent=None):
         super().__init__(parent)
         self._non_nan_enabled = False
         self._default_value = 0
-        self.set_nan_enabled(True)  # 默认启用NaN
+        self.set_nan_enabled(True)  # set default to NaN
         
     def set_default_value(self, value):
-        """设置默认值，用于切换到非NaN模式时"""
+        """set default value when switching to non-NaN mode"""
         self._default_value = value
     
     def set_nan_enabled(self, enabled):
-        """启用或禁用NaN输入"""
-        self._non_nan_enabled = not enabled  # 反转逻辑
+        """start or stop NaN input"""
+        self._non_nan_enabled = not enabled  # inverse logic
         if not self._non_nan_enabled:
             self.lineEdit().setText('NaN')
             self._is_nan = True
         else:
-            self.setValue(self._default_value)  # 使用保存的默认值
+            self.setValue(self._default_value)  # use default value
             self.lineEdit().setReadOnly(False)
             
     def validate(self, text, pos):
@@ -39,7 +39,7 @@ class CustomDoubleSpinBox(QDoubleSpinBox):
             return float('nan')
         try:
             value = float(text)
-            self._default_value = value  # 保存用户输入的值作为新的默认值
+            self._default_value = value  # save user input value as new default
             return value
         except ValueError:
             return self._default_value
@@ -55,7 +55,7 @@ class CustomDoubleSpinBox(QDoubleSpinBox):
         return super().value()
 
 class BoundingBoxDialog(QDialog):
-    """边界框设置对话框"""
+    """bounding box dialog"""
     
     def __init__(self, parent=None, current_bb=None):
         super().__init__(parent)
@@ -66,15 +66,15 @@ class BoundingBoxDialog(QDialog):
     def setup_ui(self):
         layout = QVBoxLayout(self)
         
-        # 创建网格布局用于SpinBox
+        # create grid layout for SpinBox
         grid = QGridLayout()
-        grid.setColumnStretch(1, 1)  # 让值列变宽
+        grid.setColumnStretch(1, 1)  # let value column stretch
         
-        # 左侧标签和值
+        # left and right labels
         labels_left = ["Left:", "Posterior:", "Inferior:"]
         labels_right = ["Right:", "Anterior:", "Superior:"]
         
-        # 重新排列控件
+        # rearrange current bounding box values
         self.spins = []
         default_pairs = [
             (-78, 78),   # Left-Right
@@ -84,10 +84,10 @@ class BoundingBoxDialog(QDialog):
         
         for i, (left_label, right_label, (def_left, def_right)) in enumerate(
             zip(labels_left, labels_right, default_pairs)):
-            # 左侧标签
+            # left side label
             grid.addWidget(QLabel(left_label), i, 0)
             
-            # 左侧值
+            # left side value
             left_spin = CustomDoubleSpinBox()
             left_spin.setRange(float('-inf'), float('inf'))
             left_spin.set_default_value(def_left)
@@ -97,10 +97,10 @@ class BoundingBoxDialog(QDialog):
             grid.addWidget(left_spin, i, 1)
             self.spins.append(left_spin)
             
-            # 右侧标签
+            # right side label
             grid.addWidget(QLabel(right_label), i, 2)
             
-            # 右侧值
+            # right side value
             right_spin = CustomDoubleSpinBox()
             right_spin.setRange(float('-inf'), float('inf'))
             right_spin.set_default_value(def_right)
@@ -112,15 +112,15 @@ class BoundingBoxDialog(QDialog):
         
         layout.addLayout(grid)
         
-        # Enable non-NaN values复选框
+        # Enable non-NaN values checkbox
         nan_layout = QHBoxLayout()
         self.non_nan_check = QCheckBox("Enable non-NaN values")
-        self.non_nan_check.setChecked(False)  # 默认不勾选，即默认使用NaN
+        self.non_nan_check.setChecked(False)  # default to unchecked
         self.non_nan_check.stateChanged.connect(self._toggle_non_nan)
         nan_layout.addWidget(self.non_nan_check)
         layout.addLayout(nan_layout)
         
-        # 按钮
+        # OK and Cancel buttons
         btn_layout = QHBoxLayout()
         ok_btn = QPushButton("OK")
         cancel_btn = QPushButton("Cancel")
@@ -132,19 +132,19 @@ class BoundingBoxDialog(QDialog):
         
         layout.addLayout(btn_layout)
         
-        # 初始化所有SpinBox为NaN状态
+        # initialize bounding box values to NaN
         self._toggle_non_nan(Qt.Unchecked)
     
     def _toggle_non_nan(self, state):
-        """切换非NaN输入功能"""
+        """switch non-NaN input feature"""
         is_non_nan = state == Qt.Checked
         for spin in self.spins:
             spin.set_nan_enabled(not is_non_nan)
     
     def get_bounding_box(self):
-        """返回边界框值"""
+        """return bounding box values"""
         values = []
-        # 按照原始顺序重新排列值：[左,后,下,右,前,上]
+        # rearrange to [左,后,下,右,前,上]
         for i in range(0, 6, 2):
             values.append(self.spins[i].value())     # 左/后/下
         for i in range(1, 6, 2):

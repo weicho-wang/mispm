@@ -43,13 +43,13 @@ class LogWidget(QTextEdit):
             message: Log message to append
             level: Log level (INFO, WARNING, ERROR)
         """
-        color = "white"  # 将默认颜色从"black"改为"white"
+        color = "white"  # set default color to white
         if level == "WARNING":
             color = "orange"
         elif level == "ERROR":
             color = "red"
         elif level == "SUCCESS":
-            color = "lightgreen"  # 将成功信息的颜色调整为更亮的绿色
+            color = "lightgreen"  # change success color to light green
             
         self.append(f'<span style="color:{color};">{message}</span>')
 
@@ -73,7 +73,7 @@ class MainWindow(QMainWindow):
         self.run_script_btn = QPushButton("LC Analysis")
         self.setup_ui()
         
-        # 设置黑色主题样式
+        # set dark theme
         self.setup_dark_theme()
         
         # Connect signals
@@ -145,7 +145,7 @@ class MainWindow(QMainWindow):
         self.batch_coregister_btn = QPushButton("Batch Coregister")
         self.batch_normalise_btn = QPushButton("Batch Normalise")
         
-        # 重新排列按钮顺序 - 按照要求排列
+        # Add buttons to layout in a specific order
         button_order = [
             self.load_nifti_btn,        # 1. Load NIFTI
             self.set_origin_btn,        # 2. Set Origin
@@ -173,12 +173,12 @@ class MainWindow(QMainWindow):
         
         # Right panel - upper part: Image Visualization
         image_view_group = QGroupBox("Image Visualization")
-        self.image_view_layout = QVBoxLayout()  # 保存引用，以便后续更改内容
+        self.image_view_layout = QVBoxLayout()  # save reference to layout for later use
         self.image_view_layout.addWidget(self.image_view)
         image_view_group.setLayout(self.image_view_layout)
         right_layout.addWidget(image_view_group, 7)  # 70% of right panel height
         
-        # 创建NIFTI查看器实例，但一开始不显示
+        # create NIFTI viewer instance while do not show it yet
         self.nifti_viewer = None
         self.is_nifti_viewer_showing = False
         
@@ -239,8 +239,8 @@ class MainWindow(QMainWindow):
             btn.setFixedWidth(120)
     
     def setup_dark_theme(self):
-        """设置黑色主题样式"""
-        # 定义黑色主题样式
+        """Set up dark theme for the application"""
+        # define dark theme style sheet
         dark_style = """
         QMainWindow, QDialog {
             background-color: #2D2D30;
@@ -376,15 +376,15 @@ class MainWindow(QMainWindow):
             width: 12px;
         }
         """
-        # 应用样式表到应用程序
+        # Apply dark theme to the application and main window
         QApplication.instance().setStyleSheet(dark_style)
         self.setStyleSheet(dark_style)
         
-        # 将样式应用到LogWidget - 修改文本颜色为白色
+        # Apply dark theme to the log widget
         self.log_widget.setStyleSheet("""
         QTextEdit {
             background-color: #1E1E1E;
-            color: white;  /* 修改默认文本颜色为白色 */
+            color: white;  /* default color of text set to white */
             border: 1px solid #3F3F46;
             font-family: Consolas, Monospace;
             font-size: 9pt;
@@ -411,9 +411,9 @@ class MainWindow(QMainWindow):
         self.set_origin_btn.clicked.connect(self.set_origin)
         self.check_reg_btn.clicked.connect(self.check_registration)
         self.run_script_btn.clicked.connect(self.show_cl_analysis_dialog)
-        self.convert_nifti_btn.clicked.connect(self.convert_to_nifti)  # 新增信号连接
+        self.convert_nifti_btn.clicked.connect(self.convert_to_nifti)  # New button for conversion
         
-        # 新增批处理按钮信号连接
+        # Batch processing signals
         self.batch_coregister_btn.clicked.connect(self.batch_coregister_images)
         self.batch_normalise_btn.clicked.connect(self.batch_normalise_images)
         self.batch_set_origin_btn.clicked.connect(self.batch_set_origin)
@@ -435,9 +435,9 @@ class MainWindow(QMainWindow):
         self.normalise_btn.setEnabled(engine_running)
         self.set_origin_btn.setEnabled(engine_running)
         self.check_reg_btn.setEnabled(engine_running)
-        self.convert_nifti_btn.setEnabled(engine_running)  # 新增按钮状态控制
+        self.convert_nifti_btn.setEnabled(engine_running)  # Enable conversion button
         
-        # 批处理按钮
+        # Batch processing buttons
         self.batch_coregister_btn.setEnabled(engine_running)
         self.batch_normalise_btn.setEnabled(engine_running)
         self.batch_set_origin_btn.setEnabled(engine_running)
@@ -602,20 +602,20 @@ class MainWindow(QMainWindow):
         if file_path:
             self.log_widget.append_log(f"Selected NIFTI file: {file_path}")
             
-            # 添加简洁的提示
+            # prompt user to select a file
             self.log_widget.append_log("Loading NIFTI viewer in visualization panel...")
             
             try:
-                # 尝试导入所需包
+                # import required packages
                 import nibabel
                 import matplotlib
                 from matplotlib.figure import Figure
                 
-                # 如果导入成功，在主窗口中显示NIFTI查看器
+                # try to import the NIFTI viewer class
                 self.view_nifti_image(file_path)
                     
             except ImportError as e:
-                # 优雅地处理缺少依赖项
+                # tackle missing dependencies
                 self.log_widget.append_log(f"Missing required packages: {str(e)}", "ERROR")
                 QMessageBox.critical(
                     self,
@@ -625,7 +625,7 @@ class MainWindow(QMainWindow):
                     "pip install -r requirements.txt"
                 )
             except Exception as e:
-                # 处理其他错误
+                # handle any other exceptions
                 self.log_widget.append_log(f"Error: {str(e)}", "ERROR")
                 QMessageBox.critical(
                     self,
@@ -636,35 +636,35 @@ class MainWindow(QMainWindow):
     def view_nifti_image(self, file_path):
         """View NIFTI image in the visualization panel instead of a separate window"""
         try:
-            # 导入NIFTI查看器类
+            # load the NIFTI viewer class
             from mispmsrc.ui.nifti_viewer import NiftiViewer
             
-            # 如果已经有查看器，先移除它
+            # remove existing viewer if any
             self.hide_nifti_viewer()
             
-            # 创建查看器实例
+            # create a new NIFTI viewer instance
             self.nifti_viewer = NiftiViewer(self)
             
-            # 将查看器设置为嵌入式模式 - 隐藏操作按钮
+            # set up the viewer in a invisible state
             self.nifti_viewer.save_btn.setVisible(False)
             self.nifti_viewer.set_origin_btn.setVisible(False)
             self.nifti_viewer.close_btn.setText("Return to Main View")
-            self.nifti_viewer.close_btn.clicked.disconnect()  # 移除原有连接
-            self.nifti_viewer.close_btn.clicked.connect(self.hide_nifti_viewer)  # 添加新连接
+            self.nifti_viewer.close_btn.clicked.disconnect()  # remove original connection
+            self.nifti_viewer.close_btn.clicked.connect(self.hide_nifti_viewer)  # add new connection
             
-            # 加载NIFTI文件
+            # load the NIFTI file
             success = self.nifti_viewer.load_nifti(file_path)
             
             if success:
-                # 隐藏图像查看器
+                # hide the main image viewer
                 self.image_view.setVisible(False)
                 
-                # 将NIFTI查看器添加到图像查看布局中
+                # add the NIFTI viewer to the layout
                 self.image_view_layout.addWidget(self.nifti_viewer)
                 self.nifti_viewer.setVisible(True)
                 self.is_nifti_viewer_showing = True
                 
-                # 添加状态信息
+                # add status information
                 self.log_widget.append_log("NIFTI viewer displayed in visualization panel")
             else:
                 self.log_widget.append_log("Failed to load NIFTI file in viewer", "ERROR")
@@ -675,19 +675,19 @@ class MainWindow(QMainWindow):
             self.logger.error(traceback.format_exc())
             
     def hide_nifti_viewer(self):
-        """隐藏NIFTI查看器，恢复主界面图像查看器"""
+        """Hide the NIFTI viewer and return to the main image viewer"""
         if self.nifti_viewer and self.is_nifti_viewer_showing:
-            # 从布局中移除NIFTI查看器
+            # remove the NIFTI viewer from the layout
             self.image_view_layout.removeWidget(self.nifti_viewer)
             self.nifti_viewer.setVisible(False)
             self.nifti_viewer = None
             self.is_nifti_viewer_showing = False
             
-            # 显示回原图像查看器
+            # return to the main image viewer
             self.image_view.setVisible(True)
             self.log_widget.append_log("Returned to main view")
 
-    @pyqtSlot()
+    @pyqtSlot()  # slot function for setting origin
     def set_origin(self):
         """Set origin of the image using Python's NIFTI viewer embedded in main window"""
         self.log_widget.append_log("Opening origin setting interface...")
@@ -696,50 +696,50 @@ class MainWindow(QMainWindow):
         if file_path:
             self.log_widget.append_log(f"Selected NIFTI file: {file_path}")
             
-            # 添加提示
+            # add status information
             self.log_widget.append_log("Loading origin setting interface in visualization panel...")
             
             try:
-                # 尝试导入所需包
+                # import required packages
                 import nibabel
                 import matplotlib
                 from matplotlib.figure import Figure
                 from mispmsrc.ui.nifti_viewer import NiftiViewer
                 
-                # 如果已经有查看器，先移除它
+                # remove existing viewer if any
                 self.hide_nifti_viewer()
                 
-                # 创建查看器实例
+                # create a new NIFTI viewer instance
                 self.nifti_viewer = NiftiViewer(self)
                 
-                # 添加信号连接，处理原点设置
+                # add signal for setting origin
                 self.nifti_viewer.origin_set.connect(self.on_origin_set)
                 
-                # 修改关闭按钮行为
+                # set up the viewer in a invisible state
                 self.nifti_viewer.close_btn.setText("Return to Main View")
-                self.nifti_viewer.close_btn.clicked.disconnect()  # 移除原有连接
-                self.nifti_viewer.close_btn.clicked.connect(self.hide_nifti_viewer)  # 添加新连接
+                self.nifti_viewer.close_btn.clicked.disconnect()  # remove original connection
+                self.nifti_viewer.close_btn.clicked.connect(self.hide_nifti_viewer)  # add new connection
                 
-                # 加载NIFTI文件
+                # load the NIFTI file
                 success = self.nifti_viewer.load_nifti(file_path)
                 
                 if success:
-                    # 隐藏图像查看器
+                    # hide the main image viewer
                     self.image_view.setVisible(False)
                     
-                    # 将NIFTI查看器添加到图像查看布局中
+                    # add the NIFTI viewer to the layout
                     self.image_view_layout.addWidget(self.nifti_viewer)
                     self.nifti_viewer.setVisible(True)
                     self.is_nifti_viewer_showing = True
                     
-                    # 添加状态信息
+                    # add status information
                     self.log_widget.append_log("Origin setting interface displayed in visualization panel")
                 else:
                     self.log_widget.append_log("Failed to load NIFTI file", "ERROR")
                     self.nifti_viewer = None
                     
             except ImportError as e:
-                # 优雅地处理缺少依赖项
+                # tackle missing dependencies
                 self.log_widget.append_log(f"Missing required packages: {str(e)}", "ERROR")
                 QMessageBox.critical(
                     self,
@@ -749,7 +749,7 @@ class MainWindow(QMainWindow):
                     "pip install -r requirements.txt"
                 )
             except Exception as e:
-                # 处理其他错误
+                # handle any other exceptions
                 self.log_widget.append_log(f"Error: {str(e)}", "ERROR")
                 QMessageBox.critical(
                     self,
@@ -758,12 +758,12 @@ class MainWindow(QMainWindow):
                 )
     
     def on_origin_set(self, coordinates):
-        """当用户在NIFTI查看器中设置原点时调用"""
+        """callback function when origin is set in the NIFTI viewer"""
         try:
             x, y, z = coordinates
             self.log_widget.append_log(f"New origin set: X={x:.2f}, Y={y:.2f}, Z={z:.2f}", "SUCCESS")
             
-            # 可以在这里添加调用MATLAB引擎设置原点的代码
+            # save the new origin coordinates to the NIFTI file
             if self.nifti_viewer and hasattr(self.nifti_viewer, 'image_file'):
                 success = self.matlab_engine.set_origin(self.nifti_viewer.image_file, coordinates)
                 if success:
@@ -773,7 +773,7 @@ class MainWindow(QMainWindow):
         except Exception as e:
             self.log_widget.append_log(f"Error processing origin coordinates: {str(e)}", "ERROR")
     
-    @pyqtSlot()
+    @pyqtSlot()  # slot function for coregistration
     def check_registration(self):
         """Check registration of images using a dialog interface"""
         self.log_widget.append_log("Opening registration check dialog...")
@@ -985,8 +985,8 @@ class MainWindow(QMainWindow):
         Returns:
             list: Paths to the latest report files
         """
-        import glob
-        import time
+        import glob  # import glob to find files
+        import time  # import time to check file modification times
         
         if not output_dir or not os.path.exists(output_dir):
             self.log_widget.append_log(f"Output directory not found: {output_dir}", "ERROR")
@@ -1502,7 +1502,7 @@ class MainWindow(QMainWindow):
 if __name__ == '__main__':
     import sys
     app = QApplication(sys.argv)
-    app.setStyle('Fusion')  # 保留 Fusion 风格，只改变颜色
+    app.setStyle('Fusion')  # keep fusion style for consistency
     
     # Create and show main window
     window = MainWindow()

@@ -427,7 +427,7 @@ class MatlabEngine(QObject):
             self.operation_completed.emit("Coregistration failed", False)
             return False
     
-    def batch_coregister_images(self, ref_image, source_files, cost_function="nmi"):
+    def batch_coregister_images(self, ref_image, source_files, cost_function="nmi"):  # cost_function="nmi" is default
         """Batch coregister images
         
         Args:
@@ -940,7 +940,7 @@ class MatlabEngine(QObject):
             
             self.operation_progress.emit("Preparing to display images...", 50)
             
-            # 先检查每个文件，判断哪些可能是PET图像
+            # Pre-scan files to identify PET images
             self._engine.eval("""
             % Pre-scan files to identify PET images
             pet_indices = [];
@@ -980,10 +980,10 @@ class MatlabEngine(QObject):
             end
             """, nargout=0)
             
-            # 正常调用check_registration
+            # call MATLAB function spm_check_registration
             self._engine.eval(f"spm_check_registration({files_str});", nargout=0)
             
-            # 使用增强的PET显示调整
+            # user-defined function to enhance display for PET images
             self._engine.eval("""
             % 获取SPM显示状态
             global st;

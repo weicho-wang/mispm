@@ -9,9 +9,9 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSignal
 
 class CheckRegDialog(QDialog):
-    """检查配准对话框，用于选择要检查的图像"""
+    """check registration dialog used to select images"""
     
-    check_started = pyqtSignal(list)  # 发送图像路径列表的信号
+    check_started = pyqtSignal(list)  # send signal of image paths list
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -23,7 +23,7 @@ class CheckRegDialog(QDialog):
     def setup_ui(self):
         layout = QVBoxLayout(self)
         
-        # 说明标签
+        # prompt label
         info_label = QLabel(
             "Select two or more image files to check their registration.\n"
             "The images will be displayed as overlays for visual inspection."
@@ -31,16 +31,16 @@ class CheckRegDialog(QDialog):
         info_label.setWordWrap(True)
         layout.addWidget(info_label)
         
-        # 图像列表组
+        # image list group
         image_group = QGroupBox("Selected Images")
         image_layout = QVBoxLayout()
         
-        # 图像列表
+        # image list widget
         self.image_list = QListWidget()
         self.image_list.setSelectionMode(QAbstractItemView.ExtendedSelection)
         image_layout.addWidget(self.image_list)
         
-        # 图像列表按钮
+        # image list buttons
         list_btn_layout = QHBoxLayout()
         self.add_btn = QPushButton("Add Images...")
         self.remove_btn = QPushButton("Remove Selected")
@@ -58,11 +58,11 @@ class CheckRegDialog(QDialog):
         image_group.setLayout(image_layout)
         layout.addWidget(image_group)
         
-        # 选项组
+        # options group
         options_group = QGroupBox("Display Options")
         options_layout = QVBoxLayout()
         
-        # 这里可以添加更多选项，如显示模式、颜色方案等
+        # add more options here such as display mode, color scheme, etc.
         options_help = QLabel(
             "Images will be displayed using SPM's orthogonal viewer.\n"
             "You can navigate through slices using SPM's interface."
@@ -73,10 +73,10 @@ class CheckRegDialog(QDialog):
         options_group.setLayout(options_layout)
         layout.addWidget(options_group)
         
-        # 按钮组
+        # buttons at the bottom
         button_layout = QHBoxLayout()
         self.check_btn = QPushButton("Check Registration")
-        self.check_btn.setEnabled(False)  # 初始禁用，直到选择了至少两个图像
+        self.check_btn.setEnabled(False)  # not enabled untile at least two images are selected
         self.cancel_btn = QPushButton("Cancel")
         
         self.check_btn.clicked.connect(self.check_registration)
@@ -87,12 +87,12 @@ class CheckRegDialog(QDialog):
         button_layout.addWidget(self.cancel_btn)
         layout.addLayout(button_layout)
         
-        # 连接图像列表变化信号
+        # connected to update button state
         self.image_list.model().rowsInserted.connect(self.update_button_state)
         self.image_list.model().rowsRemoved.connect(self.update_button_state)
     
     def add_images(self):
-        """添加图像到列表"""
+        """add images to the list"""
         file_paths, _ = QFileDialog.getOpenFileNames(
             self, 
             "Select Images for Registration Check",
@@ -102,7 +102,7 @@ class CheckRegDialog(QDialog):
         
         if file_paths:
             for path in file_paths:
-                # 检查是否已存在于列表中
+                # check whether the image is already in the list
                 exists = False
                 for i in range(self.image_list.count()):
                     if self.image_list.item(i).data(Qt.UserRole) == path:
@@ -113,31 +113,31 @@ class CheckRegDialog(QDialog):
                     item = QLabel(os.path.basename(path))
                     item.setToolTip(path)
                     self.image_list.addItem(os.path.basename(path))
-                    # 存储完整路径作为用户数据
+                    # store the full path as user data
                     self.image_list.item(self.image_list.count() - 1).setData(Qt.UserRole, path)
     
     def remove_images(self):
-        """从列表中移除选中的图像"""
+        """remove selected images from the list"""
         selected_items = self.image_list.selectedItems()
         for item in selected_items:
             self.image_list.takeItem(self.image_list.row(item))
     
     def clear_images(self):
-        """清空图像列表"""
+        """clear image list"""
         self.image_list.clear()
     
     def update_button_state(self):
-        """更新按钮状态"""
+        """update button state"""
         self.check_btn.setEnabled(self.image_list.count() >= 2)
     
     def check_registration(self):
-        """执行检查配准操作"""
-        # 收集图像路径
+        """ perform registration check"""
+        # collect image paths
         file_paths = []
         for i in range(self.image_list.count()):
             file_paths.append(self.image_list.item(i).data(Qt.UserRole))
         
         if len(file_paths) >= 2:
-            # 发送信号并关闭对话框
+            # send signal and close dialog
             self.check_started.emit(file_paths)
             self.accept()

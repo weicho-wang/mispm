@@ -5,7 +5,7 @@ import logging
 import os
 
 class SUVRCalculator:
-    """SUVR (Standardized Uptake Value Ratio) 计算类"""
+    """SUVR (Standardized Uptake Value Ratio) calculator class."""
     
     def __init__(self):
         self.roi_img = None
@@ -15,7 +15,7 @@ class SUVRCalculator:
         self.logger = logging.getLogger(__name__)
         
     def load_masks(self, roi_path, ref_path):
-        """加载ROI和参考区域mask"""
+        """load ROI and reference masks"""
         # Load mask data and affine transforms
         self.logger.info(f"Loading ROI mask from {roi_path}")
         roi_nii = nib.load(roi_path)
@@ -29,7 +29,7 @@ class SUVRCalculator:
         self.roi_affine = roi_nii.affine
         self.ref_affine = ref_nii.affine
         
-        # 计算非零点数量
+        # calculate the number of non-zero voxels in the masks
         self.num_roi = np.count_nonzero(self.roi_img)
         self.num_ref = np.count_nonzero(self.ref_img)
         
@@ -37,7 +37,7 @@ class SUVRCalculator:
         self.logger.info(f"Reference mask contains {self.num_ref} non-zero voxels")
     
     def _resample_mask(self, mask_img, target_shape):
-        """将mask重采样到目标shape"""
+        """Resample the mask image to match the target shape using nearest neighbor interpolation."""
         if mask_img.shape == target_shape:
             return mask_img
             
@@ -49,7 +49,7 @@ class SUVRCalculator:
             else:
                 zoom_factors.append(float(target) / current)
                 
-        # Fix bug: Ensure zoom_factors is a list, not an int
+        # Ensure zoom_factors is a list, not an int
         if not isinstance(zoom_factors, list):
             self.logger.warning(f"Invalid zoom_factors: {zoom_factors}, using default [1,1,1]")
             zoom_factors = [1, 1, 1]
@@ -190,7 +190,7 @@ class SUVRCalculator:
                 
                 # Calculate SUVR with thorough validation
                 if suv_ref > 0:
-                    suvr = suv_roi / suv_ref
+                    suvr = suv_roi / suv_ref  # calculate SUVR
                 else:
                     self.logger.warning(f"Reference SUV is zero, cannot calculate SUVR for {filepath}")
                     errors.append(f"Zero reference SUV in {filepath}")
@@ -205,7 +205,7 @@ class SUVRCalculator:
                 if not (0.5 <= suvr <= 3.0):
                     self.logger.warning(f"SUVR value ({suvr:.4f}) out of typical range for {filepath}")
                 
-                suvr_values.append(suvr)
+                suvr_values.append(suvr)  # Store SUVR value
                 filtered_files.append(filepath)  # Add to successful files
                 processed_files += 1
                 self.logger.info(f"Processed {filepath}: SUVR = {suvr:.4f}, ROI voxels: {num_roi}, REF voxels: {num_ref}")

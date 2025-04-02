@@ -7,7 +7,7 @@ import logging
 import sys
 from mispmsrc.CLRefactoring.suvr_calc import SUVRCalculator
 from mispmsrc.CLRefactoring.CL_calc_test import CLCalculator
-from mispmsrc.CLRefactoring.plotting import AnalysisPlotter  # 添加导入
+from mispmsrc.CLRefactoring.plotting import AnalysisPlotter  # added plotting module
 
 class PIBAnalyzer:
     """PIB SUVR and CL analysis class"""
@@ -16,7 +16,7 @@ class PIBAnalyzer:
         self.suvr_calculator = SUVRCalculator()
         self.cl_calculator = CLCalculator()
         self.logger = logging.getLogger(__name__)
-        self.plotter = AnalysisPlotter()  # 添加绘图对象
+        self.plotter = AnalysisPlotter()  # Initialize the plotter
         
         # Check dependencies
         self._check_dependencies()
@@ -48,7 +48,7 @@ class PIBAnalyzer:
     def run_analysis(self, ref_path, roi_path, ad_dir, yc_dir, standard_data_path, patient_info=None):
         """Run full analysis workflow"""
         try:
-            # 保存路径供绘图使用
+            # Store paths for later use
             self.ref_path = ref_path
             self.roi_path = roi_path
             self.standard_data_path = standard_data_path

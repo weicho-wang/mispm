@@ -6,7 +6,7 @@ REF_nii = load_nii('./Centiloid_Std_VOI/Centiloid_Std_VOI/nifti/2mm/voi_WhlCbl_2
 REF_img = double(REF_nii.img);
 
 % filepath_mask_ROI
-ROI_nii = load_nii('./Centiloid_Std_VOI/Centiloid_Std_VOI/nifti/2mm/voi_ctx_2mm.nii');
+ROI_nii = load_nii('./Centiloid_Std_VOI/Centiloid_Std_VOI/nifti/2mm/voi_ctx_2mm.nii'); 
 ROI_img = double(ROI_nii.img);
 
 
